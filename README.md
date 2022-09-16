@@ -26,6 +26,8 @@ Simple usage example:
 ```
 import { CUSTOM, renderShadTex } from '/_v1_jsm/custom.js'
 
+const cust = await new CUSTOM();
+
 const amb = new THREE.AmbientLight(0xffffff, 0.005);
 
 const dir = new THREE.DirectionalLight(0xa0ffa0, 0.4);
@@ -70,4 +72,14 @@ const mat_main = cust.material('lamb', {
 		map: ['/_v1_jsm/textures/uv.png', () => { callback('r') }, ],
     	}
  });
+ 
+ ...
+ 
+ const m = new THREE.Mesh(geo, cust.shallowCopyMat(mat_main));
+ 
+ cust.makeShadowTree(scene);
+ 
+ renderShadTex(renderer, scene, cust);
+ renderer.render(scene, camera);
+ 
 ```
