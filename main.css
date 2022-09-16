@@ -1,0 +1,112 @@
+﻿body {
+	width: 100vw;
+	height: 100vh;
+	background-color: #000;
+	color: #ddd;
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 13px;
+}
+
+#grid-container {
+	height: 100%;
+	display: grid;
+	justify-items: stretch;
+	grid-template-columns: min-content 1fr min-content;
+	grid-template-rows: min-content 1fr min-content;
+	grid-template-areas: 
+	"tl tm tr" 
+	"ml mm mr" 
+	"bl bm br";
+}
+
+#header {
+	grid-area: tm;
+	height: 35px;
+}
+
+#left {
+	grid-area: tl/tl / ml/ml;
+	width: 100px;
+}
+
+#right {
+	grid-area: mr;
+	width: 250px;
+   height: calc(100vh - 35px - 30px);
+   overflow: auto;
+	padding: 10px;
+}
+
+#left, #right {
+	background-color: #040404;
+}
+
+#main {
+	grid-area: mm;
+}
+
+#footer {
+	grid-area: bm;
+	height: 30px;
+}
+
+.noreq {
+	color: rgb(255, 106, 0);
+	font-size: 48px;
+}
+
+#main_canvas {
+	display: block;
+}
+
+#vignette {
+	grid-area: mm;
+	width: 500px;
+	height: 500px;
+	z-index: 1000;
+	pointer-events: none;
+}
+
+.fadein_nofill {
+	animation-name: fadein;
+	animation-duration: 1s;
+}
+  
+@keyframes fadein {
+	0% {opacity: 0.0;}
+	100% {opacity: 1.0;}
+}
+
+/*  DEV  */
+
+input:focus {
+	outline: none;
+}
+
+input[type=text] {
+	margin: 0px 5px 0px 5px;
+	width: 30px;
+}
+
+input[type=range] {
+	width: calc(100% - 30px);
+	-webkit-appearance: none;
+	background: transparent;
+}
+
+input[type=range]::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	height: 11px;
+	width: 11px;
+	border-radius: 15px;
+	background: #0075ff;
+	cursor: pointer;
+	margin-top: -5px;
+}
+
+input[type=range]::-webkit-slider-runnable-track {
+	height: 4px;
+	cursor: pointer;
+	border: solid 1px #0075ff;
+	border-radius: 2px;
+}

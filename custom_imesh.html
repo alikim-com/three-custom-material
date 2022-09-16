@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+	<link rel="icon" type="image/png" href="/_v1_img/favico.png">
+	<link type="text/css" rel="stylesheet" href="/_v1_jsm/css/ui.css">
+	<link type="text/css" rel="stylesheet" href="./main.css">
+	<link type="text/css" rel="stylesheet" href="/_v1_jsm/css/controls.css">
+	<title>Custom material :: iMesh scene</title>
+
+	<style>
+		.title {
+			color: #db7a05;
+		}
+
+		.title_sh {
+			color: #808080;
+			margin-bottom: 1px;
+		}
+
+		.shadows {
+			padding: 5px;
+			background-color: rgba(255, 255, 255, 0.1);
+		}
+
+		#title_mat {
+			background-color: rgba(255, 255, 255, 0.05);
+			text-transform: uppercase;
+		}
+	</style>
+
+</head>
+<body>
+	
+<script type="module">
+
+	import * as THREE from '/_v1_jsm/three.module.js'
+	//import * as THREE from '/_v1_jsm/three141.showshader.js'
+
+	import { get, createElem, addSliderWidget } from '/_v1_jsm/ui.js'
+
+	import { log, slog, formatNumber, parseGET } from '/_v1_jsm/utils.js'
+		
+	import { Selector3D } from '/_v1_jsm/utils_three.js'
+
+	import { TestScenes } from '/_v1_jsm/test_scenes.js'
+
+	import * as CONTROLS from '/_v1_jsm/controls.js'
+
+	import { addHint, updateHint } from '/_v1_jsm/hint.js'
+
+	import { hslRgb, rgbHsl } from '/_v1_jsm/glsl_ported.js'
+
+	// DEV
+	import Stats from '/_v1_jsm/stats.js';
+
+	import { addUI, uiButton, uiMenu, makeSwitchBtn } from '/_v1_jsm/ui.js'
+
+	const texldr = new THREE.TextureLoader();
+
+	const texRequest = (url, ind = '') => {
+		return new Promise(function (resolve, reject) {
+			texldr.load(
+				url,
+				(tex) => {
+					resolve({
+						data: tex,
+						ind
+					})
+				},
+				undefined,
+				(err) => {
+					reject({
+						data: null,
+						ind,
+						src: `texRequest(${url}, ${ind})`,
+						err
+					})
+				});
+		});
+	};
+
+
+	const html = {};
+	['main', 'left', 'right'].forEach(nm => { html[nm] = get(nm) });
+
+	const canvas = createElem('canvas', 500, 500, 'main_canvas');
+
+	html.main.appendChild(canvas);
+	html.canvas = canvas;
+
+	const getW = () => html.main.clientWidth;
+	const getH = () => html.main.clientHeight;
+
+	// THREE.js
+
+	const GET = parseGET();
+
+	const [w, h] = [getW(), getH()];
+
+	const renderer = new THREE.WebGLRenderer({
+		antialias: GET.AA == 'true',
+		canvas: html.canvas,
+	});
+
+   const dpr = GET.HIDPI == 'true' ? (window.devicePixelRatio || 1) : 1;
+	renderer.setSize(Math.floor(w * dpr), Math.floor(h * dpr), false);
+   html.canvas.style = `width: ${w}px; height: ${h}px;`;
+
+	// scene
+
+	const callback = (mode, arg) => {
+		if(mode == 'r') {
+			state.rdy = true;
+			maybeRender();
+		}
+	};
+
+	const test_scenes = new TestScenes(renderer);
+	const [scene, camera, ui] = test_scenes.iMeshScene(w, h, callback, GET.RNG);
+
+	// frame animation
+
+	const state = { play: false, rdy: false };
+
+	const maybeRender = () => { if (state.rdy && !state.play) render(false) };
+
+	const framerate = 60;
+	const fpsint = 1000 / framerate;
+	let elapsed, now, then;
+
+	const renderFrame = newtime => {
+
+		if (!state.play) return;
+		requestAnimationFrame(renderFrame);
+
+		if (!newtime) then = newtime = window.performance.now();
+
+		now = newtime;
+		elapsed = now - then;
+
+		if (!fpsint || elapsed > fpsint) {
+
+			then = now - (elapsed % fpsint);
+
+			render(true);
+			
+			// DEV stats
+			if (html.statbtn.swData.state) stats.update();
+		}
+	};
+
+	// lid -> show altals
+	const render = (anim, lid) => { test_scenes.render(scene, camera, anim, lid) };
+
+	// HINT
+
+	if(scene.userData.hints)
+		addHint(document.documentElement, scene.userData.hints);
+
+	// SELECT
+
+	if(scene.userData.selectable) {
+		
+		scene.selector3D = new Selector3D(renderer, scene, camera, w, h);
+
+		// backup original colors
+		for(const obj of scene.selector3D.list) 
+			obj.material.userData.cust_color = {...obj.material.uniforms.color};
+		// selection color
+		const scolor = { value: [0.75, 0.75, 0.75] };
+
+		let sobj_old;
+		const colorSelect = (x, y) => {
+			const sobj = scene.selector3D.getObj(x, y);
+			if(sobj != sobj_old) {
+				for(const obj of scene.selector3D.list) 
+					obj.material.uniforms.color = obj.material.userData.cust_color;
+				if(sobj) sobj.material.uniforms.color = scolor;
+				sobj_old = sobj;
+				maybeRender();
+			}
+			return sobj;
+		};
+
+		let sel = false;
+		canvas.addEventListener('mouseover', evt => { 
+			sel = true;
+			const pressed = evt.buttons || evt.which;
+			if(!pressed) {
+				const sobj = colorSelect(evt.offsetX, evt.offsetY);
+				// hint
+				if(sobj) 
+					updateHint(sobj.name, canvas, true); 
+				else 
+					updateHint('', canvas, false);
+			}
+		});
+		canvas.addEventListener('mouseout', evt => { 
+			sel = false; 
+			updateHint('', canvas, false);
+		});
+		canvas.addEventListener('mousemove', evt => { 
+			const pressed = evt.buttons || evt.which;
+			if(!pressed && sel) {
+				const sobj = colorSelect(evt.offsetX, evt.offsetY);
+				// hint
+				if(sobj) 
+					updateHint(sobj.name, canvas, true); 
+				else 
+					updateHint('', canvas, false);
+			}
+		});
+	}
+
+	// STATS
+
+	addUI(
+	`<div id="swidget" style="display:flex;align-items:center;flex-direction:column;margin:10px;">
+		<button id="statbtn" class="mini-x mt5">...</button>
+	</div>`, html.left);
+
+	['swidget', 'statbtn'].forEach(nm => html[nm] = get(nm));
+
+	const stats = new Stats(40);
+	const st_elem = stats.dom;
+	st_elem.setAttribute('id', 'stats');
+	st_elem.setAttribute('class', 'shrink');
+	st_elem.style = 'cursor: pointer;';
+
+	html.swidget.insertBefore(st_elem, html.statbtn);
+
+	makeSwitchBtn(html.statbtn, ['turn on', ' turn off'], 0);
+	html.statbtn.addEventListener('click', evt => { 
+		evt.target.swData.flip(); 
+	});
+
+	// camera controls
+
+	CONTROLS.create({
+	cont: html.canvas, 
+	cam: camera,
+	type: 'Orbital', 
+	overlay: true, 
+	lookAt: camera.userData.lookAt,
+	callback: maybeRender,
+	sens: {p: 0.3},
+	});
+
+	// UI
+
+	if(ui) {
+
+		ui.userData = {};
+
+		const uiLight = (id, lgt) => {
+
+			const uid = 'lgt_' + id;
+			addUI(`<div id="${uid}" class="mt15"><label class="title">${lgt.name}</label></div>`, html.right);
+			html[uid] = get(uid);
+
+			if(lgt.color) {
+				const rgb = lgt.color;
+				const dat = ui.userData[lgt.name].hue = {};	
+				dat.hsl = rgbHsl([rgb.r, rgb.g, rgb.b]);
+
+				const cb = t => { 
+					const val = dat._p.h / dat._p.hmax;
+					html[dat.uid_lab].textContent = formatNumber(val, 2);
+					const hsl = dat.hsl;
+					const rgb = hslRgb([val, hsl[1], hsl[2]]);
+					lgt.color.r = rgb[0];
+					lgt.color.g = rgb[1];
+					lgt.color.b = rgb[2];
+					maybeRender();
+				};
+				addSliderWidget(html, 'hue', uid, cb, dat, 0, '&#x26EC;');
+				// set after uid_lab is created to use updated slider width
+				dat.setPos(dat.hsl[0], 0.5);
+				cb('');
+			}
+
+			if(lgt.hasOwnProperty('intensity')) {
+				const att = lgt.userData.hasOwnProperty('power');
+				const int = att ? lgt.userData.power : lgt.intensity;
+				const dat = ui.userData[lgt.name].int = {};
+				dat.max = int * 3;
+
+				const cb = t => { 
+					const val = dat.max * dat._p.h / dat._p.hmax;
+					const sml = val < 1000;
+					const suf = sml ? '' : 'k';
+					const mult = sml ? 1 : 0.001;
+					html[dat.uid_lab].textContent = formatNumber(val * mult, 2) + suf;
+					if(att) 
+						lgt.userData.power = val;
+					else 
+						lgt.intensity = val;
+					maybeRender();
+				};
+				const title = att ? 'power' : 'intensity';
+				addSliderWidget(html, title, uid, cb, dat, 0, '&#x2600;');
+				dat.setPos(int / dat.max, 0.5);
+				cb('');
+			}
+
+			if(lgt.userData.hasOwnProperty('decay')) {
+				const dec = lgt.userData.decay;
+				const dat = ui.userData[lgt.name].dec = {};
+				dat.max = 3;
+
+				const cb = t => { 
+					const val = dat.max * dat._p.h / dat._p.hmax;
+					html[dat.uid_lab].textContent = formatNumber(val, 2);
+					lgt.userData.decay = val;
+					maybeRender();
+				};
+				addSliderWidget(html, 'decay', uid, cb, dat, 0, '&#11085;');
+				dat.setPos(dec / dat.max, 0.5);
+				cb('');
+			}
+
+			const sh = lgt.userData.shadow;
+			if(sh) {
+				const uid_sh = uid + '_sh';
+				const uid_atl = uid + '_atl';
+				addUI(`<div class="vcenter"><label class="ml5 title_sh s13 mono">Shadows (${sh.tex.w}x${sh.tex.h})</label><button id="${uid_atl}" class="mini-xc ml5 mono">view atlas</button></div><div id="${uid_sh}" class="shadow"></div>`, html[uid]);
+				[uid_sh, uid_atl].forEach(nm => { html[nm] = get(nm) });
+
+				const dat_sh = ui.userData[lgt.name].sh = {};
+				
+				if(sh.hasOwnProperty('strength')) {
+					const str = sh.strength;
+					const dat = dat_sh.str = {};
+					const cb = t => { 
+						const val = dat._p.h / dat._p.hmax;
+						html[dat.uid_lab].textContent = formatNumber(val, 2);
+						sh.strength = val;
+						maybeRender();
+					};
+					addSliderWidget(html, 'strength', uid_sh, cb, dat, 0, '&#x25D1;');
+					dat.setPos(str, 0.5);
+					cb('');
+				}
+
+				if(sh.hasOwnProperty('blur')) {
+					const blr = sh.blur;
+					const dat = dat_sh.blr = {};
+					dat.notches = 4;
+					dat.val = [0, 3, 5, 7];
+					const cb = t => { 
+						const val = dat.val[Math.round((dat.notches - 1) * dat._p.h / dat._p.hmax)];
+						html[dat.uid_lab].textContent = val;
+						sh.blur = val;
+						maybeRender();
+					};
+					addSliderWidget(html, 'blur', uid_sh, cb, dat, 0, '&#x224b;', dat.notches);
+					dat.setPos(blr / 7, 0.5);
+					cb('');
+				}
+
+				html[uid_atl].addEventListener('click', () => { 
+					if(state.play) html.play.click();
+					render(false, sh.lid);
+				});
+			}
+		};
+
+		const lgts = ui?.lgts;
+		for(const nm in lgts) {
+			const lgt = lgts[nm]; 
+			ui.userData[lgt.name] = {};
+			uiLight(nm, lgt);
+		}
+
+		if(ui.spec) {
+			const uis = 'spec';
+			addUI(`<div id="${uis}" class="mt15"><label class="title">Specular</label></div>`, html.right);
+			html[uis] = get(uis);
+			{
+				const dat = ui.userData.spec_str = {};
+				dat.max = 10;
+				const cb = t => { 
+					const val = dat.max * dat._p.h / dat._p.hmax;
+					html[dat.uid_lab].textContent = formatNumber(val, 2);
+					ui.spec.str = val;
+					maybeRender();
+				};
+				addSliderWidget(html, 'strength', uis, cb, dat, 0, '&#x25D1;');
+				dat.setPos(ui.spec.str / dat.max, 0.5);
+				cb('');
+			}
+			{
+				const dat = ui.userData.spec_fo = {};
+				dat.max = 15;
+				const cb = t => { 
+					const val = dat.max * dat._p.h / dat._p.hmax + 0.001;
+					html[dat.uid_lab].textContent = formatNumber(val, 2);
+					ui.spec.fo = val;
+					maybeRender();
+				};
+				addSliderWidget(html, 'falloff', uis, cb, dat, 0, '&#x25CE;');
+				dat.setPos(ui.spec.fo / dat.max, 0.5);
+				cb('');
+			}
+		}
+
+		if(ui.hasOwnProperty('tlucy')) {
+			const uit = 'tlucy';
+			addUI(`<div id="${uit}" class="mt15"><label class="title">Translucency</label></div>`, html.right);
+			html[uit] = get(uit);
+
+			const dat = ui.userData.tlucy = {};
+			const cb = t => { 
+				const val = dat._p.h / dat._p.hmax;
+				html[dat.uid_lab].textContent = formatNumber(val, 2);
+				ui.tlucy = val;
+				maybeRender();
+			};
+			addSliderWidget(html, '', uit, cb, dat, 0, '&#x25D1;');
+			dat.setPos(ui.tlucy, 0.5);
+			cb('');
+		}
+
+		if(ui.hasOwnProperty('gamma')) {
+			const uig = 'gamma';
+			addUI(`<div id="${uig}" class="mt15"><label class="title">Gamma correction</label></div>`, html.right);
+			html[uig] = get(uig);
+			const dat = ui.userData.gamma = {};
+			dat.max = 3;
+			const cb = t => { 
+				const val = dat.max * dat._p.h / dat._p.hmax;
+				html[dat.uid_lab].textContent = formatNumber(val, 2);
+				ui.gamma = val;
+				maybeRender();
+			};
+			addSliderWidget(html, 'gamma', uig, cb, dat, 0, '&#947;');
+			dat.setPos(ui.gamma / dat.max, 0.5);
+			cb('');
+		}
+
+		if(ui.hasOwnProperty('shad_mode')) {
+			const uishmd = 'shadmode';
+			addUI(`<div id="${uishmd}" class="mt15"><label class="title">Shadow mode</label>` + 
+			uiMenu({
+				id: uishmd + '_sel',
+				cont_cls: 'shrink ml5',
+				opt: ['dark', 'light', 'contour'],
+				cls: 'ml5',
+				lab_cls: 'def ml15 mono'}),
+			html.right);
+
+			get(uishmd + '_sel').addEventListener('change', evt => {
+				ui.shad_mode = evt.target.selectedIndex;
+				maybeRender();
+			});
+		}
+	}
+
+	html.play = get('play');
+	makeSwitchBtn(html.play, ['play animation', 'stop animation'], 0);
+
+	html.play.addEventListener('click', evt => {
+		evt.target.swData.flip();
+		state.play = evt.target.swData.state;
+		renderFrame();
+	});
+
+   const reload = (nm, val) => {
+      const loc = window.location;
+      let get = '?';
+      GET[nm] = val;
+      for(const p in GET) { get += `${p}=${GET[p]}&`; }
+      window.location.href = loc.origin + loc.pathname + get.slice(0, -1);
+   };
+
+   get('url_aa').addEventListener('click', () => { reload('AA', 'true') });
+   get('url_dpr').addEventListener('click', () => { reload('HIDPI', 'true') });
+   get('url_rng').addEventListener('click', () => { reload('RNG', 'true') });
+
+</script>
+
+<div id="grid-container">
+
+	<div id="header" class="center">
+      <button id="play" class="ml10">...</button>
+      <button id="url_aa" class="ml20">reload with AA</button>
+      <button id="url_dpr" class="ml20">reload with HiDPI</button>
+      <button id="url_rng" class="ml10">reload random trees</button>
+   </div>
+	<div id="left"></div>
+	<div id="main" class="noscroll"></div>
+	<div id="title_mat" class="center s12">Material Setup</div>
+	<div id="right" class="cscroll"></div>
+
+	<div id="footer" class="center mono s12"> &copy; copyright (c) alikim.com 2001 - 2022</div>
+
+</div>
+
+</body>
+</html>
