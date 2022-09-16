@@ -21,4 +21,53 @@ Examples:
 
 * extensive setup of the material lights and shadows [https://alikim.com/test/custom_imesh.html](https://alikim.com/test/custom_box.html)
 
+Simple usage example:
 
+```
+import { CUSTOM, renderShadTex } from '/_v1_jsm/custom.js'
+
+const amb = new THREE.AmbientLight(0xffffff, 0.005);
+
+const dir = new THREE.DirectionalLight(0xa0ffa0, 0.4);
+const dir_lookat = [0, 0, mid];
+
+const pnt0 = new THREE.PointLight(0xffa0a0, 1);
+
+const mat_main = cust.material('lamb', {
+		uni: {
+			color: { value: [1, 1, 1] },
+			amb: {
+				get color() { return [amb.color.r, amb.color.g, amb.color.b] },
+				get intensity() { return amb.intensity },
+			},
+			dir: {
+				get color() { return [dir.color.r, dir.color.g, dir.color.b] },
+				get intensity() { return dir.intensity },
+				position: [dir.position.x, dir.position.y, dir.position.z],
+				lookat: dir_lookat,
+			},
+			pnt: {
+				get color() { return [pnt0.color.r, pnt0.color.g, pnt0.color.b] },
+				intensity: 100,
+				position: [pnt0.position.x, pnt0.position.y, pnt0.position.z],
+				decay: 2,
+				shadow: {
+		      blur: 5,
+		      strength: 1,
+		      tex: { w: 1050, h: 875 },
+		      cam: new THREE.PerspectiveCamera(55, 1, 30, 300),
+		      lookat: [0, 0, -100],
+	      },
+			},
+			specular: {
+				get position() {
+					const pos = camera.position;
+					return [pos.x, pos.y, pos.z];
+				},
+				strength: 0.5,
+				falloff: 6,
+			},
+			map: ['/_v1_jsm/textures/uv.png', () => { callback('r') }, ],
+    }
+ });
+```
