@@ -79,7 +79,8 @@ const mat_main = cust.material('lamb', {
  
  cust.makeShadowTree(scene);
  
- renderShadTex(renderer, scene, cust);
- renderer.render(scene, camera);
- 
+ const render = () => {
+ 	renderShadTex(renderer, scene, cust);
+ 	renderer.render(scene, camera);
+ };
 ```
