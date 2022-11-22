@@ -127,6 +127,28 @@ const multVec16CM = (A, V) => {
    return C;
 };
 
+const multCM = (A, B, Ac, Ar, Bc, Br) => {
+   const Alen = Ac * Ar;
+	if (Ac != Br) {
+		console.error(`multCM: dimentions mismatch A: ${Ac}x${Ar}, B: ${Bc}x${Br}`);
+		return [];
+   }
+   
+   const Clen = Ar * Bc;
+   const C = new Array(Clen);
+   for (let i = 0; i < Clen; i++) C[i] = 0;
+   for (let off = 0; off < Bc; off++) {
+      const offB = Br * off;
+      const offC = Ar * off;
+      for (let i = 0; i < Alen; i++) {
+         const r = i % Ar;
+         const c = Math.floor(i / Ar);
+         C[offC + r] += A[i] * B[offB + c];
+      }
+   }
+   return C;
+};
+
 const mult = (A, B) => {
 	const C = [];
 	const [Ar, Ac] = [A.length, A[0].length];
@@ -296,4 +318,4 @@ const fromPosSkewScale = obj => {
 	return [m0, m3, 0, 0, m1, m4, 0, 0, 0, 0, 1, 0, pos.x, pos.y, pos.z, 1];
 };
 
-export { to2D, to1D, makeIdentity, makeMove, makeScale, makeRotX, makeRotY, makeRotZ, transpose, multVec, multVec16CM, mult, makeOrtho, makeOrthoSym, makePersp, makeView, invert2x2, invert4x4, toPosSkewScale, fromPosSkewScale }
+export { to2D, to1D, makeIdentity, makeMove, makeScale, makeRotX, makeRotY, makeRotZ, transpose, multVec, multVec16CM, multCM, mult, makeOrtho, makeOrthoSym, makePersp, makeView, invert2x2, invert4x4, toPosSkewScale, fromPosSkewScale }

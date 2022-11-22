@@ -59,12 +59,13 @@ const loadAssets = (async_prom, toload) => {
 				assets[grp] = assets[grp] || {};
 
 				if (type == 'g') { // glsl
-					const reg = /<script[\w\W]+?id="([^"]+)">([\w\W]+?)<\/script>/g;
-					const str = val.data;
+               const reg = /<script[\w\W]+?id="([^"]+)">([\w\W]+?)<\/script>/g;
+               const str = val.data;
 					let marr;
                while ((marr = reg.exec(str)) != null) {
                   const id = marr[1];
                   assets[grp][id] = `// ID: ${id} ->\n${marr[2]}\n // <- ID: ${id}\n`;
+                  // console.log(grp, id);
                }
 
 				} else if (type == 't') { // textures

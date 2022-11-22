@@ -1,19 +1,29 @@
-import { hslRgb, rgbHsl, rotate } from '/_v1_jsm/glsl_ported.js'
+import { hslRgb, rotate, glClamp, glMix } from '/_v1_jsm/glsl_ported.js'
 
 import { CUSTOM, renderShadTex } from '/_v1_jsm/custom.js'
 
 import * as THREE from '/_v1_jsm/three.module.js'
 //import * as THREE from '/_v1_jsm/three141.showshader.js'
 
-import { dot, quaternFromETh, quaternFromVects } from '/_v1_jsm/geometry.js'
+import { dot, dist, quaternFromETh, quaternFromVects } from '/_v1_jsm/geometry.js'
+
+import MaterialSetup from '/_v1_js/test_materials.js'
 
 import GMRNG from '/_v1_jsm/rng.js'
 
 import { log, slog } from '/_v1_jsm/utils.js'
 
-import { addHelper } from '/_v1_jsm/utils_three.js'
+import { addHelper, calcBox, rgbaToRgb } from '/_v1_jsm/utils_three.js'
 
 import { create as createTree } from '/_v1_jsm/tree.js'
+
+const shaders = {
+	list: new Set(['texBounce', 'greyPS', 'hslRgb']), // 'rgbHsl' // gltfScene
+	global: null,
+	// built_in:
+};
+
+const texldr = new THREE.TextureLoader();
 
 const rng = new GMRNG();
 for (let i = 0; i < 10; i++) rng.f01();
@@ -30,8 +40,9 @@ const rnd3 = v => v * Math.random();
 
 const cust = await new CUSTOM();
 
-function TestScenes(_renderer) {
+function TestScenes(_renderer, _assets) {
 	this.renderer = _renderer;
+	this.assets = _assets;
 }
 
 /* tree test scene, M - mesh
@@ -793,7 +804,6 @@ TestScenes.prototype.bumpScene = function (w, h, callback) {
 	scene.background = new THREE.Color(0.01, 0.01, 0.15);
 	scene.add(group);
 	
-	const texldr = new THREE.TextureLoader();
 	const bumpMap = texldr.load(
 		'/_v1_jsm/textures/bump.png',
 		() => { callback('r') },
@@ -853,12 +863,12 @@ TestScenes.prototype.bumpScene = function (w, h, callback) {
 				position: [pnt0.position.x, pnt0.position.y, pnt0.position.z],
 				decay: 0,
 			},
-		   bmap: bumpMap,
-		   bmfact: { value: 1 },
+			bmap: bumpMap,
+			bmfact: { value: 1 },
 		}
 	});
 	
-   //mat_main.uniforms.bmap.value.magFilter = THREE.NearestFilter;
+	//mat_main.uniforms.bmap.value.magFilter = THREE.NearestFilter;
 
 	const geo = new THREE.PlaneGeometry(200, 200);
 	const mat = cust.shallowCopyMat(mat_main);
@@ -924,8 +934,8 @@ TestScenes.prototype.texlightScene = function (w, h, callback) {
 
 	const pnt0 = new THREE.PointLight(0xffa0a0, 1);
 	pnt0.position.set(0, 75, -205);
-   //pnt0.position.set(25, 75, -205);
-   
+	//pnt0.position.set(25, 75, -205);
+	
 	const pnt1 = new THREE.PointLight(0xa0a0ff, 1);
 	pnt1.position.set(-100, 120, -380);
 
@@ -963,19 +973,19 @@ TestScenes.prototype.texlightScene = function (w, h, callback) {
 		tex: { w: 1050, h: 750},
 		cam: new THREE.PerspectiveCamera(57, 1, 1, 700),
 		lookat: lookAt,
-   };
-   
-   pnt0.userData.texlight = {
-      fov: 45,
-      near: 175,
-      up: [0, 1, 0],
-      lookat: [0, 0, mid - 50],
-      map: ['/_v1_jsm/textures/spot.png', tex => {
+	};
+	
+	pnt0.userData.texlight = {
+		fov: 45,
+		near: 175,
+		up: [0, 1, 0],
+		lookat: [0, 0, mid - 50],
+		map: ['/_v1_jsm/textures/spot.png', tex => {
          tex.magFilter = THREE.NearestFilter;
-         callback('r');
-      },],
+			callback('r');
+		},],
 		//mapctrl
-   };
+	};
 
 	this.box_lgts = [pnt0];
 
@@ -1030,8 +1040,8 @@ TestScenes.prototype.texlightScene = function (w, h, callback) {
 				get intensity() { return pnt0.userData.power },
 				position: [pnt0.position.x, pnt0.position.y, pnt0.position.z],
 				get decay() { return pnt0.userData.decay },
-            shadow: pnt0.userData.shadow,
-            texture: pnt0.userData.texlight,
+				shadow: pnt0.userData.shadow,
+				texture: pnt0.userData.texlight,
 			},/*{
 				get color() { return [pnt1.color.r, pnt1.color.g, pnt1.color.b] },
 				get intensity() { return pnt1.userData.power },
@@ -1148,7 +1158,7 @@ TestScenes.prototype.texlightScene = function (w, h, callback) {
 	this.bs_vel = [];
 	for (let i = 0; i < sh_num; i++) this.bs_vel.push(.005 + rnd3(.010));
 
-   this.mid = mid;
+	this.mid = mid;
 
 	cust.makeShadowTree(scene);
 
@@ -1169,15 +1179,296 @@ TestScenes.prototype.texlightSceneAnimate = function () {
 		sh.position.z += ori[2];
 	}
 
-   const pnt0 = this.box_lgts[0];
-   const tlobj = pnt0.userData.texlight;
-   tlobj.ang = tlobj.ang || Math.PI;
-   const r = 50;
-   const off = [0, 0, this.mid];
-   const z = r * Math.cos(tlobj.ang);
-   const x = r * Math.sin(tlobj.ang);
-   tlobj.lookat = [x + off[0], 0 + off[1], z + off[2]]; //log(tlobj.lookat)
-   tlobj.ang += 0.01;
+	const pnt0 = this.box_lgts[0];
+	const tlobj = pnt0.userData.texlight;
+	tlobj.ang = tlobj.ang || Math.PI;
+	const r = 50;
+	const off = [0, 0, this.mid];
+	const z = r * Math.cos(tlobj.ang);
+	const x = r * Math.sin(tlobj.ang);
+	tlobj.lookat = [x + off[0], 0 + off[1], z + off[2]]; //log(tlobj.lookat)
+	tlobj.ang += 0.01;
+}
+
+TestScenes.prototype.gltfScene = function (w, h, callback) {
+	const group = new THREE.Object3D();
+	const scene = new THREE.Scene();
+	scene.name = 'gltfScene';
+	scene.background = new THREE.Color(0, 0, 0);
+	scene.add(group);
+
+	const [near, far] = [0.001, 50];
+	const mid = -0.5 * (near + far);
+	const camera = new THREE.PerspectiveCamera(45, w / h, near, far);
+	
+	//camera.position.set(5, 5, 5);
+	camera.position.set(
+		4.457025831068217, 3.916772109600273, -17.731881086823908
+	);
+	camera.setRotationFromQuaternion(new THREE.Quaternion(
+		-0.15880824316552664, 0.33691865421531725, 0.057766022186977246, 0.9262444866368243
+	));
+
+	const lookAt = [0, 0, mid];
+	//const lookAt = [4.689291436502376, 3.4439928364726047, -18.04406632225299];
+	//camera.lookAt(...lookAt);
+	camera.userData.lookAt = lookAt;
+
+	group.position.set(0, 0, mid);
+
+	const home_dist = () => {
+		const cpos = camera.position;
+		const gpos = group.position;
+		const d = dist([cpos.x, cpos.y, cpos.z], [gpos.x, gpos.y, gpos.z]);
+		//console.log(d, camera.far, d / camera.far);
+		return d / camera.far;
+	};
+	const hd0 = home_dist();
+	const hd_unit = () => glClamp(2 * (home_dist() - hd0) / (1 - hd0), 0, 1);
+	
+	const greyPS = sRGB => {
+      // photoshop desaturate
+		const bw = 0.5 * (
+			Math.min(sRGB[0], Math.min(sRGB[1], sRGB[2])) +
+			Math.max(sRGB[0], Math.max(sRGB[1], sRGB[2]))
+		);
+      return bw;
+	};
+
+	const water = { rgb: [0, 0.5, 0.68] };
+	water.grey = hslRgb([0.83, 0.1, Math.min(0.5, greyPS(water.rgb))]);
+	
+// calc dist in an outside
+
+	const monochr = {
+		fresh: false,
+		d: hd_unit(),
+		value: {
+			hsl: [0.83, 0.1, 1],
+			get dist() {
+				if (!camera.changed() && !group.changed() || monochr.fresh) return monochr.d;
+				monochr.fresh = true;
+				monochr.d = hd_unit();
+
+				const wmatrgb = water?.mat?.color;
+				if (wmatrgb) {
+					const mix = glMix(water.rgb, water.grey, monochr.d);
+					const chan = 'rgb';
+					for(const ch in chan) wmatrgb[chan[ch]] = mix[ch];
+				}
+				return monochr.d;
+			},
+		}
+	};
+
+	const [mat, amb, dir] = MaterialSetup(shaders, mid, monochr);
+
+	const base_map = texldr.load(
+		'/_v1_composites/uv_materials.png',
+		() => { callback('r') },
+		undefined,
+		err => { console.log('base texture load err:', err)}
+	);
+	base_map.flipY = false;
+
+	// create shader materials
+	const shmat = {};
+	for (const nm in mat) {
+		mat[nm].id = nm;
+		shmat[nm] = cust.material('lamb', mat[nm]);
+		cust.addTexture('map', shmat[nm], base_map);
+	}
+
+	const axhlp = new THREE.AxesHelper(50);
+
+	const gltf = {};
+	for (let fname in this.assets.gltf) {
+		const imp = this.assets.gltf[fname]?.scene?.children;
+		gltf[fname] = {};
+		for (const mesh of imp) gltf[fname][mesh.name] = mesh;
+	}
+
+	group.add(axhlp);
+
+	const home = new THREE.Object3D();
+
+	const convertRange = (r, flip = true) => {
+		if (flip) {
+			r.v[0] = 1 - r.v[0];
+			r.v[1] = 1 - r.v[1];
+		}
+		for (const uv of ['u', 'v']) {
+			const arr = r[uv];
+			arr[2] = Math.abs(arr[1] - arr[0]);
+			arr[3] = 1 / arr[2];
+		}
+	};
+
+	const setColor = (r, rr, g, gr, b, br) => (
+		{
+			value: [
+				r + rr * Math.random(),
+				g + gr * Math.random(),
+				b + br * Math.random()
+			]
+		}
+	);
+
+	const log_texfact = { x: 1, y: 2.5 };
+	// uni for texBounce
+	const log_range = { u: [0.1, 0.99, 0, 0], v: [0.885, 0.99, 0, 0] };
+	// log_range comes from non-flipped image measurements -> flip here to match tex .flipY
+	convertRange(log_range);
+
+	const door_range = {
+		u: [346, 660, 0, 0], v: [147, 224, 0, 0],
+		off: [0, 0,   1, 0], fact: [2, 2,   1, 0] // [2],[3] cond of bounce
+	};
+	['u', 'v'].forEach(nm => { door_range[nm] = door_range[nm].map(e => e/1024) });
+	convertRange(door_range, false);
+
+	const roof_range = { u: [0, 1, 0, 0], v: [0.28125, 0.41015625, 0, 0] };
+	convertRange(roof_range, false);
+
+	const floor_range = [576, 289, 0, 143, 96, 0, 0, 0, 0].map(e => e / 1024);
+	floor_range[6] = 3; // tiling
+	floor_range[7] = 8.17;
+
+	const fire_range = { bot: [304, 291, 0, 243, 150, 0, 0, 0, 0].map(e => e / 1024) };
+	fire_range.mid = [...fire_range.bot];
+	fire_range.top = [...fire_range.bot];
+	const ftile = { bot: [4, 3], mid: [3, 12], top: [4, 1] };
+	for (const sub in fire_range) {
+		fire_range[sub][6] = ftile[sub][0];
+		fire_range[sub][7] = ftile[sub][1];
+	}
+	const fcolor = { bot: [1, 1, 1], mid: [1, 1, 0.8], top: [0.9, 0.9, 0.8] };
+	
+	const yard_range = [3, 456, 0, 193, 69, 0, 0, 0, 0].map(e => e / 1024);
+	yard_range[6] = 3;
+	yard_range[7] = 3;
+	
+	for (const nm in gltf.home) {
+		const mesh = gltf.home[nm];
+		home.add(mesh);
+		const [coll, sub, mid] = nm.split('_');
+		if (coll == 'base' || coll == 'stubs') {
+			mesh.material = cust.shallowCopyMat(shmat.bounce_uv_cond);
+			const box = calcBox(mesh.geometry, true);
+			const sc = mesh.scale;
+			const size = Math.max(box.xsize * sc.x, box.ysize * sc.y, box.zsize * sc.z);
+			mesh.material.uniforms.color = setColor(0.85, 0.1, 0.98, 0.02, 0.98, 0.02);
+			mesh.material.uniforms.uvmap = {
+				value: [
+					...log_range.u,
+					...log_range.v,
+					0.88 * Math.random(), 0.05 * Math.random(), 0, 0.092,
+					log_texfact.x * size, log_texfact.y, 0.12, 0
+				]
+			};
+		} else if (mesh.name == 'yard_land') {
+			mesh.material = cust.shallowCopyMat(shmat.tile_uv);
+			mesh.material.uniforms.uvmap = { value: yard_range };
+			mesh.geometry.attributes.color =
+				new THREE.BufferAttribute(rgbaToRgb(mesh.geometry.attributes.color.array), 3);
+			mesh.material.vertexColors = true;
+
+		} else if (coll == 'door') {
+			mesh.material = cust.shallowCopyMat(shmat.bounce_uv_cond);
+			const fact = [...door_range.fact];
+			if (sub == 'small') {
+				fact[0] = 4;
+				fact[1] = 6;
+			}
+			mesh.material.uniforms.uvmap = {
+				value: [
+					...door_range.u,
+					...door_range.v,
+					...door_range.off,
+					...fact,
+				]
+			};
+			mesh.material.uniforms.color = {
+				value: sub == 'big' ?
+					[0.3, 0.1, 0.1] : [0.5, 0.33, 0.25]
+			};
+			cust.addDefine(mesh.material, 'fragment', 'MAPMIX');
+			mesh.material.uniforms.mapmix = { value: sub == 'big' ? 0.33 : 0.3 };
+			
+		} else if (['triwall', 'window', 'porch', 'rock'].includes(coll)) {
+			mesh.material = cust.shallowCopyMat(shmat.def);
+			if (coll == 'porch') {
+				mesh.material.uniforms.color = setColor(0.7, 0.05, 0.6, 0.05, 0.6, 0.05);
+
+			} else if (coll == 'window') {
+				cust.addDefine(mesh.material, 'fragment', 'MAPMIX');
+				mesh.material.uniforms.mapmix = { value: 0.25 };
+
+			} else if (coll == 'rock') {
+				let mx = 0.33;
+				if (mid < 5) {
+					const i = parseInt(mid);
+					mesh.material.uniforms.color = setColor(
+						0.03 + 0.18 * i, 0, 0.02 + 0.18 * i, 0, 0.05 + 0.15 * i, 0
+					);
+
+				} else { // sub == 'big'
+					mx = 0.66;
+					mesh.material.uniforms.color = setColor(0.55, 0.1, 0.5, 0.1, 0.1, 0.1);
+				}
+				cust.addDefine(mesh.material, 'fragment', 'MAPMIX');
+				mesh.material.uniforms.mapmix = { value: mx };
+			}
+
+		} else if (coll == 'roof') {
+			mesh.material = cust.shallowCopyMat(shmat.bounce_v);
+			mesh.material.uniforms.color = {
+				value: [
+					0.8 + 0.05 * Math.random(),
+					0.8 + 0.05 * Math.random(),
+					0.75 + 0.05 * Math.random()
+				]
+			};
+			mesh.material.uniforms.uvmap = {
+				value: [
+					...roof_range.u,
+					...roof_range.v,
+					0, Math.random() * roof_range.v[2], 0, 0,
+					1, 1, 0, 0
+				]
+			};
+
+		} else if (coll == 'floor' || coll == 'fireplace') {
+			mesh.material = cust.shallowCopyMat(shmat.tile_uv);
+			mesh.material.uniforms.uvmap = {
+				value: coll == 'floor' ? floor_range : fire_range[sub],
+			};
+			if (coll == 'fireplace') mesh.material.uniforms.color = { value: fcolor[sub] };
+
+		} else if(coll == 'water') {
+			water.mat = mesh.material = new THREE.MeshBasicMaterial({
+				color: new THREE.Color(...water.rgb),
+				transparent: true,
+				opacity: 0.3,
+			});
+		
+		} else {
+			mesh.material = shmat.def;
+			//mesh.visible = false;
+		}
+	}
+	home.rotation.y += Math.PI;
+	group.add(home);
+
+	//cust.makeShadowTree(scene);
+
+	setTimeout(() => { callback('r') }, 100);
+
+	return [scene, camera, null, memset];
+}
+
+TestScenes.prototype.gltfSceneAnimate = function () {
+
 }
 
 TestScenes.prototype.render = function (scene, camera, anim, lid) {
@@ -1186,4 +1477,4 @@ TestScenes.prototype.render = function (scene, camera, anim, lid) {
 	if(anim) this[scene.name + 'Animate']();
 }
 
-export { TestScenes }
+export { shaders, TestScenes }

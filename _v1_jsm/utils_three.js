@@ -1,4 +1,10 @@
-import { slog, log } from '/_v1_jsm/utils.js'
+function log() {
+	console.log(...arguments);
+}
+
+let slog = obj => log(objToString(obj));
+
+const get = id => document.getElementById(id);
 
 import * as THREE from '/_v1_jsm/three.module.js'
 
@@ -7,6 +13,8 @@ import { sphereToCart, quaternRotateMult } from '/_v1_jsm/geometry.js'
 let max_tex_size = 0;
 const gl = document.createElement('canvas')?.getContext('webgl');
 if (gl) max_tex_size = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+
+const texldr = new THREE.TextureLoader();
 
 const traverseTree = function (src, callback) {
 	const recurse = obj3D => {
@@ -404,8 +412,7 @@ Selector3D.prototype.getObj = function(x, y) {
 	return this.list[id];
 }
 
-const texldr = new THREE.TextureLoader();
-const texLoader = (url, ind = '') => {
+const texRequest = (url, ind = '') => {
 	return new Promise(function (resolve, reject) {
 		texldr.load(
 			url,
@@ -418,7 +425,7 @@ const texLoader = (url, ind = '') => {
 			undefined,
 			(err) => {
 				reject({
-					data: err,
+					data: null,
 					ind,
 					src: `texRequest(${url}, ${ind})`,
 					err
@@ -558,7 +565,181 @@ const camHelper = cam => {
 	return grp;
 };
 
-const qGet = q => [q.w, q.x, q.y, q.z];
+const posGet = obj => {
+	const pos = obj.position;
+	return [pos.x, pos.y, pos.z];
+};
+
+const rgbGet = obj => {
+	const clr = obj.color;
+	return [clr.r, clr.g, clr.b];
+};
+
+const qGet = obj => {
+	const q = obj.quaternion;
+	return [q.w, q.x, q.y, q.z];
+};
 const qMake = q => new THREE.Quaternion(q[1], q[2], q[3], q[0]);
 
-export { bisecTriangle, computeTwistNormals, computeProfileNormals, traverseTree, makeRT, renderRT, renderRTVP, renderTexQuad, renderTexQuadCust, addHelper, camHelper, genAtlas, Selector3D, texLoader, vAlphaLine, alphaLine, qGet, qMake }
+const quaternToCS = (obj, _cs) => {
+	const q = qGet(obj);
+	const cs = _cs || [-1, 0, 0, 0, 1, 0, 0, 0, -1]; // cam
+	return quaternRotateMult(cs, ...q);
+};
+
+const calcBox = (geo, size) => {
+	const arr = geo.attributes.position.array;
+	const box = {
+		xmin: Infinity,
+		xmax: -Infinity,
+		ymin: Infinity,
+		ymax: -Infinity,
+		zmin: Infinity,
+		zmax: -Infinity,
+	};
+	const nm = ['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax', 'xsize', 'ysize', 'zsize'];
+	for (let i = 0; i < arr.length; i+=3) {
+		for (let j = 0; j < 3; j++) {
+			const val = arr[i + j];
+			const ind = j * 2;
+			const [min, max] = [nm[ind], nm[ind + 1]];
+			if (val < box[min]) box[min] = val;
+			else if (val > box[max]) box[max] = val;
+		}
+	}
+	if(size)
+	for (let j = 0; j < 3; j++) {
+		const ind = j * 2;
+		const [min, max] = [nm[ind], nm[ind + 1]];
+		box[nm[j + 6]] = Math.abs(box[max] - box[min]);
+	}
+	return box;
+};
+
+const getShader = (id, shaders, js) => {
+	let src = get(id)?.textContent || shaders?.[id];
+	if (!src) {
+		const err = `shader '${id}' not found`;
+		console.error(err);
+		return err;
+	}
+ 
+	let found;
+	do {
+		found = false;
+		src = src.replace(/#include '([^']+)'/g,
+		function () {
+			found = true;
+			const $1 = arguments[1];
+			const elem = get($1)?.textContent || shaders?.[$1];
+			if (!elem) console.error(`include shader '${$1}' not found`);
+			return elem;
+		});
+		src = src.replace(/<val ([^>]+)>/g, // <val js.xxx>
+		function () {
+			found = true;
+			return eval(arguments[1]) || '';
+		});
+		
+	} while (found);
+ 
+	return src;
+};
+
+const rgbaToRgb = f32arr => {
+	const len = f32arr.length;
+	const arr = new Float32Array(3 * len / 4);
+	let off = 0;
+	for (let i = 0; i < len; i+=4) {
+		arr.set(f32arr.slice(i, i + 3), off);
+		off += 3;
+	}
+	return arr;
+};
+
+const makeMipmapTex = size => {
+
+	const makeCanvas = (size, color) => {
+ 
+	  const canv = document.createElement('canvas');
+	  const cont = canv.getContext('2d');
+	  canv.width = canv.height = size;
+ 
+	  cont.fillStyle = color;
+	  cont.fillRect(0, 0, size, size);
+ 
+	  return canv;
+	};
+ 
+	const makeColor = arr => `rgb(${arr[0]}%, ${arr[1]}%, ${arr[2]}%)`;
+ 
+	const rgb = [[100, 0, 0], [0, 100, 0], [0, 0, 100]];
+	const rgblen = rgb.length;
+ 
+	const canv = makeCanvas(size, makeColor(rgb[0]));
+	const canv_tex = new THREE.CanvasTexture(canv);
+	canv_tex.mipmaps[0] = canv;
+ 
+	const last = Math.log2(size);
+	for(let i = 1; i <= last; i++) {
+	  size /= 2;
+	  const step = Math.floor(i / rgblen) + 1;
+	  const clr = rgb[i % rgblen].map(e => e / step);
+	  canv_tex.mipmaps[i] = makeCanvas(size, makeColor(clr));
+	}
+ 
+	return canv_tex;
+};
+ 
+const enableTracking = (arr, props) => {
+	const tid = `_ET_`;
+	arr.forEach(obj => { 
+		props.forEach(pr => {
+			const op = obj[pr];
+			if (!op) return;
+			obj[tid + pr] = { ...op };
+		});
+		obj.changed = () => {
+			for (const pr of props) {
+				const op = obj[pr];
+				const mp = obj[tid + pr];
+				for (const nm in op) if (op[nm] != mp[nm]) return true;
+			}
+			return false;
+		};
+		obj.memset = () => { 
+			for (const pr of props) {
+				const op = obj[pr];
+				const mp = obj[tid + pr];
+				for (const nm in op) mp[nm] = op[nm];
+			}
+		};
+	});
+};
+
+const blendTo3D = crd => [crd[0], crd[2], -crd[1]];
+
+const disposeIMesh = (cont, im) => {
+	cont.remove(im);
+	im.geometry.dispose();
+	im.material.dispose();
+	im.dispose();
+};
+
+const IMesh = (cont, gen, im, geo, mat, size, verbose) => {
+	if(im) {
+      if (!gen && im.userData.count >= size) {
+         if (verbose) log(`resizing IMesh ${im.userData.count} >= ${size}`);
+			im.count = size;
+			return im;
+		}
+		disposeIMesh(cont, im);
+   }
+   if (verbose) log(`new IMesh ${size}`);
+	const imesh = new THREE.InstancedMesh(geo, mat, size);
+	imesh.userData.count = size;
+	cont.add(imesh);
+	return imesh;
+};
+
+export { bisecTriangle, computeTwistNormals, computeProfileNormals, traverseTree, makeRT, renderRT, renderRTVP, renderTexQuad, renderTexQuadCust, addHelper, camHelper, genAtlas, Selector3D, texRequest, vAlphaLine, alphaLine, qGet, qMake, quaternToCS, posGet, rgbGet, calcBox, getShader, rgbaToRgb, makeMipmapTex, enableTracking, blendTo3D, IMesh, log, slog, get }

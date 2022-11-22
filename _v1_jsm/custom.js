@@ -9,31 +9,9 @@ import { dot, cross, norm, vectsEqual } from '/_v1_jsm/geometry.js'
 
 import { get, img1x1, deepCopy, deepCopyFull, log, slog } from '/_v1_jsm/utils.js'
 
-import { traverseTree, makeRT, genAtlas, renderRTVP, renderTexQuadCust } from '/_v1_jsm/utils_three.js'
+import { getShader, traverseTree, makeRT, genAtlas, renderRTVP, renderTexQuadCust, texRequest } from '/_v1_jsm/utils_three.js'
 
 const texldr = new THREE.TextureLoader();
-
-const texRequest = (url, ind = '') => {
-	return new Promise(function (resolve, reject) {
-		texldr.load(
-			url,
-			(tex) => {
-				resolve({
-					data: tex,
-					ind
-				})
-			},
-			undefined,
-			(err) => {
-				reject({
-					data: null,
-					ind,
-					src: `texRequest(${url}, ${ind})`,
-					err
-				})
-			});
-	});
-};
 
 // IMPORT
 
@@ -147,7 +125,7 @@ CUSTOM.prototype.addDefine = function (meshmat, shader, nm) {
 const updateDefine = (nm, meshmat, add, js_set) => {
 	const defnm = nm.toUpperCase();
 	if (js_set) {
-		js_set.fs_defines.add(defnm);
+		for(const nm in js_set) js_set[nm].add(defnm);
 	} else {
 		const fs_defines = meshmat.userData.fs_defines;
 		if (!fs_defines.has(defnm)) {
@@ -185,23 +163,6 @@ CUSTOM.prototype.addTexCtrl = function (nm, obj, mtx, js_set) {
 };
 
 CUSTOM.prototype.material = function (name, _obj = {}) {
-
-	const getShader = id => {
-		let src = shaders[id];
-		if (!src) console.error(`shader '${id}' not found`);
-		src = src.replace(/#include '([^']+)'/g,
-			function () {
-				const $1 = arguments[1];
-				const elem = get($1)?.textContent || shaders[$1];
-				if (!elem) console.error(`include shader '${$1}' not found`);
-				return elem;
-			});
-		src = src.replace(/<val ([^>]+)>/g, // <val js.xxx>
-			function () {
-				return eval(arguments[1]);
-			});
-		return src;
-	};
 
 	const maybeShadow = (lgts, nm) => {
 
@@ -339,6 +300,8 @@ CUSTOM.prototype.material = function (name, _obj = {}) {
 				}
 			});
 			// auto update texture cs (x, y, z, ori)
+			// [up,vp,wp] = [[cos(xp,x),cos(xp,y)...]...][u,v,w] = [xp,yp,zp][u,v,w]
+			// [up,vp,wp] = [dot(xp,uvw),dot(yp,uvw),dot(zp,uvw)]
 			if(!obj.texcs) Object.defineProperty(obj, 'texcs', {
 				configurable: true,
 				enumerable: true,
@@ -352,11 +315,12 @@ CUSTOM.prototype.material = function (name, _obj = {}) {
 					obj.tlz = frwd;
 					const tlx = norm(cross(...obj.up, ...frwd));
 					const tly = norm(cross(...obj.tlz, ...tlx));		
-					const ori = [0, 0];
+					const ori = [0, 0]; // tex cs origin in the world frame
 					const n = obj.near;
-					// ori = prime cs origin in the world frame
 					for (let i = 0; i < 3; i++) ori[i] = frwd[i] * n + pos[i];
-					// ori in double prime i.e. prime w/o translation
+					// transl -> + worldOri in prime or - primOri in double prime
+					// double prime = prime w/o transl
+					// TODO: should account for focal distortion
 					const tu = dot(ori, tlx);
 					const tv = dot(ori, tly);
 					obj._texcs = [...tlx, ...tly, tu, tv, 0];
@@ -400,6 +364,18 @@ CUSTOM.prototype.material = function (name, _obj = {}) {
 		vs_defines: '',
 		fs_defines: ''
 	};
+
+	if (_obj.inject) {
+		const inj_shdr = _obj.inject.shaders;
+		if (inj_shdr) {
+			for (const nm in inj_shdr) shaders[nm] = inj_shdr[nm];
+			delete _obj.inject.shaders;
+		}
+		js.inject = _obj.inject;
+	}
+
+	if (_obj.uni_ext)
+		for (const p in _obj.uni_ext) objuni[p] = _obj.uni_ext[p];
 
 	// lights
 
@@ -474,12 +450,14 @@ CUSTOM.prototype.material = function (name, _obj = {}) {
 
 	}
 
+	for (const nm of ['fog', 'monochr']) if (uni[nm]) objuni[nm] = uni[nm];
+
 	// material specific
 
 	if (uni.map)
-		this.addTexture('map', obj, uni.map, { fs_defines, vs_defines });
+		this.addTexture('map', obj, uni.map, { fs_defines });
 	if (uni.mapctrl)
-		this.addTexCtrl('map', obj, uni.mapctrl, { fs_defines, vs_defines });
+		this.addTexCtrl('map', obj, uni.mapctrl, { fs_defines });
 	
 	if (uni.bmap) {
 		this.addTexture('bmap', obj, uni.bmap, { fs_defines });
@@ -515,12 +493,16 @@ CUSTOM.prototype.material = function (name, _obj = {}) {
 		});
 	}
 	if (['lamb', 'depth', 'r2d2'].includes(name)) {
-		obj.vertexShader = shaders[vs] || getShader('vs_' + name);
-		obj.fragmentShader = shaders[fs] || getShader('fs_' + name);
+		obj.vertexShader = shaders[vs] || getShader('vs_' + name, shaders, js);
+		obj.fragmentShader = shaders[fs] || getShader('fs_' + name, shaders, js);
 	}
 
-	obj.vertexShader = obj.vertexShader || getShader(vs);
-	obj.fragmentShader = obj.fragmentShader || getShader(fs);
+	for (const nm of ['vertex', 'fragment']) {
+		const sh = nm + 'Shader';
+		obj[sh] = obj[sh] || getShader(_obj[nm[0] + 's'], shaders, js);
+		obj[sh] = _obj?.inject?.replace?.(obj[sh]) || obj[sh];
+		obj[sh] = _obj.id ? obj[sh] + `// <- MAT: ${_obj.id}\n` : obj[sh];
+	}
 
 	if (!obj.vertexShader || !obj.fragmentShader) console.error(`missing shaders for CUSTOM.material '${name}'`);
 	

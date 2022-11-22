@@ -1,5 +1,16 @@
 const glFract = val => val - Math.floor(val);
-const glMix = (x, y, a) => x * (1 - a) + y * a;
+const glMix = (x, y, a) => {
+   const [xlen, ylen] = [x.length, y.length];
+   if (xlen != ylen) {
+      console.error(`glMix: x.length(${xlen}) != y.length(${ylen})`);
+      return 0;
+   }
+   const vx = xlen ? x : [x];
+   const vy = ylen ? y : [y];
+   const mix = new Array(vx.length);
+   for (let i = 0; i < mix.length; i++) mix[i] = vx[i] + (vy[i] - vx[i]) * a;
+   return mix;
+};
 const glClamp = (x, min, max) => Math.min(Math.max(x, min), max);
 const glMod = (x, y) => x - y * Math.floor(x / y);
 

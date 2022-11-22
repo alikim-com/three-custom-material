@@ -34,19 +34,40 @@ const formatString = (str, n) => {
 	return str.length > n ? str.slice(0, n) : str.padStart(n, ' ');
 };
 
-const formatNumber = (n, prec = 3) => {
-	const str = String(n);
+const formatNumber = (n, prec = 3, sign) => {
+   const w = !sign || n < 0 ? '' : sign;
+   const str = String(n);
+   const strlen = str.length;
 	const arr = str.split('.');
 	const len = arr.length;
-	const minsym = arr[0].length + 1;
 	if (len == 2) {
-		if (arr[1].length > prec) {
-			return `${arr[0]}.${arr[1].slice(0, prec)}`;
-		}
-		return `${arr[0]}.${arr[1]}`.padEnd(minsym + prec, '0');
+		if (arr[1].length > prec)
+			return `${w}${arr[0]}.${arr[1].slice(0, prec)}`;
+      const toadd = prec - arr[1].length;
+		return w + str.padEnd(strlen + toadd, '0');
 	} else if (len == 1) {
-		return `${arr[0]}.`.padEnd(minsym + prec, '0');
+		return w + `${str}.`.padEnd(strlen + prec + 1, '0');
 	}
+};
+
+const formatNumber2 = (n, fmt) => {
+   const s = fmt[0] == ' ' && n > 0 ? '\xa0' : '';
+   fmt = fmt[0] == ' ' ? fmt.slice(1) : fmt;
+   const [t, prec] = fmt.split('.');
+   const ret = {};
+   const str = prec ? formatNumber(n, parseInt(prec)) : String(n);
+   const float = parseFloat(str);
+   if (t[0] == 'f') {
+      ret.float = float;
+      ret.string = s + str;
+   } else if (t[0] == 'i') {
+      ret.int = Math.round(float);
+      ret.string = s + ret.int;
+   } else if (t[0] == 'u') {
+      ret.int = Math.max(0, Math.round(float));
+      ret.string = s + ret.int;
+   }
+   return ret;
 };
 
 const strToSafe = (str) => {
@@ -218,4 +239,17 @@ const clipCopy = (txt, cb) => {
 	}
 };
 
-export { get, img1x1, getHTML, parseGET, printArr, log, slog, formatString, formatNumber, strToSafe, safeToStr, objToString, deepCopy, deepCopyFull, saveAs, clipCopy }
+const bouncer = (a, b, v, err = 0.0001) => {
+   const [ab, va, vb] = [Math.abs(a - b), Math.abs(v - a), Math.abs(v - b)];
+   if(Math.abs(ab - va - vb) < err) return v;
+   const [adj, opp, ext] = va < vb ? [a, b, va] : [b, a, vb];
+   const ato = adj < opp ? 1.0 : -1.0;
+   const folds = ext / ab;
+   const ff = Math.floor(folds);
+   const tail = ext - ff * ab;
+   return ff % 2 == 0.0 ? adj + ato * tail : opp - ato * tail;
+};
+
+const flip = (a, b, f) => f ? [a, b] : [b, a];
+
+export { get, img1x1, getHTML, parseGET, printArr, log, slog, formatString, formatNumber, formatNumber2, strToSafe, safeToStr, objToString, deepCopy, deepCopyFull, saveAs, clipCopy, bouncer, flip }

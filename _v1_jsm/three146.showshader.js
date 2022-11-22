@@ -18126,6 +18126,7 @@ class WebGLUniforms {
 }
 
 function WebGLShader( gl, type, string ) {
+   console.log({ type: type - 35632 ? 'vertex' : 'fragment', string });
 
 	const shader = gl.createShader( type );
 

@@ -1,5 +1,7 @@
 import { vectLength, norm, cross, quaternRotate as rotate } from '/_v1_jsm/geometry.js'
 
+function log() { console.log(...arguments) }
+
 const mult = (w1, x1, y1, z1, w2, x2, y2, z2) => { // rotation addition
     return [
         w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
@@ -24,8 +26,16 @@ let dragging, panning, rolling, inverse;
 
 let _MBDown, _MMove, _MBUp, _MBMenu, _MWHL;
 
-const orbitObject0 = (pit, yaw) => {
+const logState = () => {
+   log('time', performance.now());
+   log('tar', tar, 'r', r);
+   log('pos', ...obj.position);
+   log('quat', ...obj.quaternion);
+   log('-----');
+}
 
+const orbitObject0 = (pit, yaw) => {
+   //logState();
     const cq = obj.quaternion;
     const qt = [cq.w, cq.x, cq.y, cq.z];
     const [cx, cy, cz] = [rotate(1, 0, 0, ...qt), rotate(0, 1, 0, ...qt), rotate(0, 0, -1, ...qt)];
@@ -41,7 +51,8 @@ const orbitObject0 = (pit, yaw) => {
 
     obj.setRotationFromQuaternion({ x: qn[1], y: qn[2], z: qn[3], w: qn[0] });
     obj.position.set(tar[0] - czn[0] * r, tar[1] - czn[1] * r, tar[2] - czn[2] * r);
-    if (hlp) hlp.position.copy(obj.position);
+   if (hlp) hlp.position.copy(obj.position);
+   //logState();
 }
 
 const orbitObject1 = (fi, th) => {
@@ -282,7 +293,7 @@ let controls;
 const cam_ctrl = obj => {
   if (controls) {
     controls.setActive(false);
-    obj.lookAt = null; // re-use internal tar
+     obj.lookAt = null; // re-use internal tar
   }
   controls = eval(`new ${obj.type}(obj.cont, obj.cam, obj.lookAt, obj.callback)`);
   controls.sensX *= obj?.sens?.x || 3;
@@ -342,6 +353,7 @@ const reset = (x, y, z) => {
       r = vectLength([cpos.x - tar[0], cpos.y - tar[1], cpos.z - tar[2]]);
    }
 };
+const tarReset = reset;
 
 const create = obj => {
    cam_ctrl(obj);
@@ -351,4 +363,7 @@ const create = obj => {
    }
 };
 
-export { Trackball, Orbital, Translate, create, reset }
+const getLookAt = () => tar;
+const getTar = getLookAt;
+
+export { Trackball, Orbital, Translate, create, reset, tarReset, getLookAt, getTar }

@@ -411,7 +411,7 @@ TREE.prototype.solidify = function (prf, par, gen = true) {
 		return [_idx, _vert, _norm];
 	};
 
-	const shineThrough = (mat, val = 0.5) => {
+	const shineThrough_141 = (mat, val = 0.5) => {
 		mat.onBeforeCompile = function(shader) {
 			shader.uniforms.shineThrough = { value: val };
 			const repl = 'shineThrough * abs(dotNL) : abs(dotNL)';
@@ -421,7 +421,23 @@ TREE.prototype.solidify = function (prf, par, gen = true) {
 			shader.vertexShader ='uniform float shineThrough;\n' + 
 			shader.vertexShader.replace('#include <lights_lambert_vertex>', new_vs);
 		}
-	};
+   };
+   
+   const translucency_146 = (mat, val = 0.5) => {
+
+      mat.onBeforeCompile = function(shader) {
+        const regex = /float dotNL *= *saturate\( *dot\( *geometry.normal, *directLight.direction *\) *\)/;
+        const repl = `
+    float _dotNL = dot(geometry.normal, directLight.direction);
+    if(_dotNL < 0.0) _dotNL = -${val} * _dotNL;
+    float dotNL = saturate(_dotNL);
+    `;
+        const new_fs = THREE.ShaderChunk.lights_lambert_pars_fragment.replace(regex, repl);
+        shader.fragmentShader =
+        shader.fragmentShader.replace('#include <lights_lambert_pars_fragment>', new_fs);
+        //console.log(new_fs);
+      }
+   };
 
 	const disposeIMesh = im => {
 		this.solid.remove(im);
@@ -476,7 +492,7 @@ TREE.prototype.solidify = function (prf, par, gen = true) {
 			ts.petals = cfg.petals;
 			ts.height = ts.height || ts.geo?.parameters?.height || 2 * ts.geo?.parameters?.radius || 1;
 			ts.geo.translate(0, ts.height / 2, 0);
-			if(ts.hasOwnProperty('shineThrough')) shineThrough(ts.mat, ts.shineThrough);
+			if(ts.hasOwnProperty('shineThrough')) translucency_146(ts.mat, ts.shineThrough);
 
 		} catch(e) { 
 			elogErr(`solidifyGen(${prf}):\n${e}`) 
@@ -497,7 +513,7 @@ TREE.prototype.solidify = function (prf, par, gen = true) {
 		if(gen) {
 			[pdata.idx, pdata.vert, pdata.norm] = getGeoData(ts.geo, pcfg.center, pcfg.offset, pcfg.usenormals);
 			pdata.len = pdata.idx.length;
-			if(pcfg.hasOwnProperty('shineThrough')) shineThrough(pcfg.mat, pcfg.shineThrough);
+			if(pcfg.hasOwnProperty('shineThrough')) translucency_146(pcfg.mat, pcfg.shineThrough);
 		}
 
 		const sz = imsz * pdata.len;

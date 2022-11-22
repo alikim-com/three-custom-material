@@ -1,90 +1,3 @@
-<script type="x-shader/x-vertex" id="vs_pos">
-	varying vec2 vuv;
-	void main() {
-		gl_Position = vec4(position, 1.0);
-		vuv = uv;
-	}
-</script>
-<script type="x-shader/x-vertex" id="vs_mvpos">
-	varying vec2 vuv;
-	void main() {
-		gl_Position = modelViewMatrix * vec4(position, 1.0);
-		vuv = uv;
-	}
-</script>
-<script type="x-shader/x-vertex" id="vs">
-	varying vec2 vuv;
-	void main() {
-		gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-		vuv = uv;
-	}
-</script>
-<script type="x-shader/x-fragment" id="fs_rgb">
-	uniform vec3 color;
-	void main() {
-		gl_FragColor = vec4(color, 1.0);
-	}
-</script>
-<script type="x-shader/x-fragment" id="fs_u">
-	varying vec2 vuv;
-	void main() {
-		gl_FragColor = vec4(vuv.x, 0.0, 0.0, 1.0);
-	}
-</script>
-<script type="x-shader/x-fragment" id="fs_v">
-	varying vec2 vuv;
-	void main() {
-		gl_FragColor = vec4(0.0, 0.0, vuv.y, 1.0);
-	}
-</script>
-<script type="x-shader/x-fragment" id="fs_uv">
-	varying vec2 vuv;
-	void main() {
-		gl_FragColor = vec4(vuv.x, 0.0, vuv.y, 1.0);
-	}
-</script>
-<script type="x-shader/x-fragment" id="fs_bi">
-	varying float bi;
-	void main() {
-		gl_FragColor = vec4(bi, 0.0, -bi, 1.0);
-	}
-</script>
-<script type="x-shader/x-fragment" id="fs_tex">
-	varying vec2 vuv;
-	uniform sampler2D map;
-	uniform float fact;
-	void main() {
-		vec4 pix = fact * texture2D(map, vuv);
-		gl_FragColor = pix;
-	}
-</script>
-<script type="x-shader/x-fragment" id="fs_float_to_quad">
-	// util shader to show float textures
-	#include 'vec4_to_float'
-	varying vec2 vuv;
-	uniform sampler2D map;
-	uniform float fact;
-	void main() {
-		float pix = fact * vec4_to_float(texture2D(map, vuv));
-		gl_FragColor = vec4(pix, 0.0, -pix, 1.0);
-	}
-</script>
-<script type="x-shader/x-vertex" id="vs_depth">
-	varying float mvz;
-	void main() {
-		vec4 mvpos = modelViewMatrix * vec4(position, 1.0);
-		gl_Position = projectionMatrix * mvpos;
-		mvz = mvpos.z;
-	}
-</script>
-<script type="x-shader/x-fragment" id="fs_depth">
-	// custom 32 bit position.z-buffer
-	#include 'float_to_vec4'
-	varying float mvz;
-	void main() {
-		gl_FragColor = float_to_vec4(mvz);
-	}
-</script>
 <script type="x-shader/x-vertex" id="vs_r2d2">
 
 	<val js.vs_defines>
@@ -181,6 +94,8 @@
 
 		#ifdef USE_INSTANCING_COLOR
 			vColor = instanceColor;
+		#elif defined USE_COLOR
+			vColor = color;
 		#else
 			vColor = vec3(1.0);
 		#endif
@@ -364,6 +279,9 @@
 		#ifdef MAPCTRL
 			uniform mat3 mapctrl;
 		#endif
+		#ifdef MAPMIX
+			uniform float mapmix;
+		#endif
 	#endif
 
 	#if defined BMAP && defined VPN
@@ -375,9 +293,8 @@
 
 	#ifdef TEXLIGHT
 		struct texLight {
-			float s;
-			float fov;
-      	vec3 lookat;
+			float s; // rec square plane half-size
+			float fov; // off switch
 			mat3 texcs;
 			#ifdef TLMAPCTRL
 				uniform mat3 mapctrl;
@@ -390,6 +307,8 @@
 	varying vec3 vColor;
 
 	uniform float gamma;
+
+	<val js?.inject?.before_main>
 
 	void main() {
 		vec3 light = vec3(0.0);
@@ -484,8 +403,11 @@
 					#ifdef TLMAPCTRL
 						//uv = (<val js.ptl.i>.mapctrl * vec3(uv, 1.0)).xy;
 					#endif
-					vec2 txl = clamp(uv * <val js.ptl.i>.s + vec2(0.5, 0.5), 0.0, 1.0);
-					pl_int *= texture2D(<val js.tlm.i>, txl).g;
+					vec2 mid_uv = uv * <val js.ptl.i>.s;
+
+					vec4 duv = vec4(dFdx(mid_uv), dFdy(mid_uv));
+					pl_int = abs(mid_uv.x) > 0.49 || abs(mid_uv.y) > 0.49 ? 0.0 : 
+						pl_int * textureGrad(<val js.tlm.i>, mid_uv + 0.5, duv.xy, duv.zw).g;
 				}
 			#endif
 
@@ -512,7 +434,7 @@
 				
 				vec3 plight = pclm * <val js.pnt.i>.color * pl_int;
 
-				if(pl_dec > 0.0) plight *= pow(length(pl_dir), -pl_dec);
+				if(pl_dec != 0.0) plight *= pow(length(pl_dir), -pl_dec);
 
 				#ifdef TRANSLUCENT
 					if(pback_side) plight *= tlucy;
@@ -536,13 +458,22 @@
 		vec3 rgb = color * vColor;
 		#ifdef MAP
 			vec2 muv = vuv;
+
+			<val js?.inject?.uvmap>
+
 			#ifdef MAPCTRL
 				muv = (mapctrl * vec3(vuv, 1.0)).xy;
 			#endif
-			rgb *= texture2D(map, muv).rgb;
+			#ifdef MAPMIX
+				rgb = mix(rgb, texture2D(map, muv).rgb, mapmix);
+			#else
+				rgb *= texture2D(map, muv).rgb;
+			#endif
 		#endif
 		
 		vec3 sRGB = gamma >= 0.0 ? pow(light, vec3(1.0 / gamma)) * rgb : light * rgb;
+		
+		<val js?.inject?.color_filter>
 
 		gl_FragColor = vec4(sRGB, 1.0);
 	}

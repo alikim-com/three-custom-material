@@ -3,11 +3,25 @@ function log() { console.log(...arguments) }
 const distLinePoint = (p1, p2, x0, y0) => {
 	const dx = p2[0] - p1[0];
 	const dy = p2[1] - p1[1];
-	const num = Math.abs(dy * x0 - dx * y0 + p2[0] * p1[1] - p2[1] * p1[0]);
+	const num = Math.abs(dx * (y0 - p1[1]) - dy * (x0 - p1[0])); // sqrt(cross[z]^2)
 	const den = Math.sqrt(dy * dy + dx * dx);
 	if (den == 0) console.error('distLinePoint(): division by zero');
 	return num / den;
 };
+
+const distLinePoint3D = (p1, p2, a) => {
+	// dot(d,v2) = cos * |v2|, cos = proj/|v2| -> dot(d,v2) = proj
+	const [v1, v2] = [new Array(3), new Array(3)];
+	for(let i = 0; i < 3; i++) {
+	  v1[i] = p2[i] - p1[i];
+	  v2[i] = a[i] - p1[i];
+	}
+	const d = norm(v1);
+	const proj = dot(d, v2);
+	const X0 = new Array(3);
+	for(let i = 0; i < 3; i++) X0[i] = p1[i] + d[i] * proj - a[i];
+	return vectLength(X0);
+ };
 
 const linesIntersect = (p1, p2, p3, p4) => {
 	if (p2[0] == p3[0] && p2[1] == p3[1]) return p2;
@@ -235,9 +249,10 @@ const quaternFromVects = (v1, v2, err = 0.0001) => {
 		return norm(q);
 	} else {
 		const aux = [0, 0, 0];
-		let [min, ind] = [v1[0], 0];
-		if (v1[1] < min) { min = v1[1]; ind = 1; }
-		if (v1[2] < min) { min = v1[2]; ind = 2; }
+   	const va = v1.map(Math.abs);
+		let [min, ind] = [va[0], 0];
+		if (va[1] < min) { min = va[1]; ind = 1; }
+		if (va[2] < min) ind = 2;
 		aux[ind] = 1;
 		const orth = norm(cross(...v1, ...aux));
 		return [0, ...orth];
@@ -380,6 +395,19 @@ const noiseGeom = (data, amp, fact) => {
 
 const clamp = (x, min, max) => Math.min(Math.max(x, min), max);
 
+const quaternCsCs = (cs1, cs2, sec = [1, 2]) => {
+	const [fib, nib] = [sec[0] * 3, sec[1] * 3];
+	const [fie, nie] = [fib + 3, nib + 3];
+	// main (forward) vects
+	const [f1, f2] = [cs1.slice(fib, fie), cs2.slice(fib, fie)];
+	// tangent vects
+	const [n1, n2] = [cs1.slice(nib, nie), cs2.slice(nib, nie)];
+	const qf = quaternFromVects(f1, f2);
+	const n11 = quaternRotate(...n1, ...qf);
+	const qt = quaternFromVects(n11, n2);
+	return quaternAdd(...qt, ...qf);
+};
+
 function LerpOrbit(_pos1, _pos2, ori) {
 	const pos1 = [..._pos1];
 	const pos2 = [..._pos2];
@@ -406,14 +434,14 @@ LerpOrbit.prototype.set = function (t) {
 	return [q, newpos];
 }
 
-function QLerp(q1, q2) { 
+function QLerp(q1, q2) {
 	const cam_def = [-1,0,0, 0,1,0, 0,0,-1];
 	// rotated cam coord sys
 	const cs1 = quaternRotateMult(cam_def, ...q1);
 	const cs2 = quaternRotateMult(cam_def, ...q2);
-	// match forward vects
+	// forward vects
 	const [f1, f2] = [cs1.slice(6), cs2.slice(6)];
-	// final pos for xy rot
+	// rotate to final pos to match frwd vects and find xy rot
 	const [qf, _dot, _cross] = quaternFromVectsFull(f1, f2);
 	const cs11x = quaternRotate(cs1[0], cs1[1], cs1[2], ...qf);
 	// for partial lerp
@@ -421,16 +449,16 @@ function QLerp(q1, q2) {
 	// local xy rotation
 	const [x1, x2] = [cs11x, cs2.slice(0,3)];
 	this.thxy = Math.acos(clamp(dot(x1, x2), -1, 1));
-	
+
 	this.q1 = q1;
 	this.cs1 = cs1;
- }
- 
- QLerp.prototype.set = function(t, wise = 1) {
+}
+
+QLerp.prototype.set = function(t, wise = 1) {
 	const qf = quaternFromETh(this.qf.e, this.qf.th * t);// log(t, this.qf)
 	const cs11 = quaternRotateMult(this.cs1, ...qf);
 	const qxy = quaternFromETh(cs11.slice(6), wise * this.thxy * t);
 	return quaternAdd(...qxy, ...quaternAdd(...qf, ...this.q1));
- }
+}
 
-export { areaTriangle, profileGeom, twistGeom, noiseGeom, distLinePoint, linesIntersect, pointInPolygon, polygonWinding, polygonOffset, dist, vectLength, vectsEqual, dot, cross, mirror, norm, norm2, cartToSphere, sphereToCart, quaternFromVects, quaternFromVectsFull, quaternFromETh, quaternAdd, quaternRotate, quaternRotateMult, quaternRotateMultInplace, LerpOrbit, QLerp }
+export { areaTriangle, profileGeom, twistGeom, noiseGeom, distLinePoint, distLinePoint3D, linesIntersect, pointInPolygon, polygonWinding, polygonOffset, dist, vectLength, vectsEqual, dot, cross, mirror, norm, norm2, cartToSphere, sphereToCart, quaternFromVects, quaternFromVectsFull, quaternFromETh, quaternAdd, quaternRotate, quaternRotateMult, quaternRotateMultInplace, LerpOrbit, QLerp, clamp, quaternCsCs }

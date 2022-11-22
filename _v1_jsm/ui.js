@@ -1,6 +1,6 @@
-function log() {
-  console.log(...arguments);
-}
+import { log, formatNumber2 } from '/_v1_jsm/utils.js'
+
+import { glClamp } from '/_v1_jsm/glsl_ported.js'
 
 let _cont = null;
 
@@ -49,6 +49,8 @@ const uic = (nm, cls) => {
 	return ` class="${cls}"`;
 };
 
+const uiv = v => v ? ' ' + v : '';
+
 const uip = (nm, v) => v ? ` ${nm}="${v}"` : '';
 
 const uipa = (nm, v) => {
@@ -96,6 +98,15 @@ const makeSwitchBtn = (elem, swtch, state) => {
 	};
 	dt.align = st => { if (dt.state != st) dt.flip() };
 	dt.flip();
+};
+
+const getContent = elem => elem.tagName == 'INPUT' ? elem.value : elem.textContent;
+
+const setContent = (elem, v) => {
+	if (elem.tagName == 'INPUT')
+		elem.value = v;
+	else
+		elem.textContent = v;
 };
 
 const selText = elem => elem.options[elem.selectedIndex]?.text;
@@ -185,7 +196,7 @@ const makeDraggable = obj => {
 		const range = _p[m + 'max'];
 		const divran = div? range * div : 0;
 		const _nxt = neg ? Math.max(0, now + dif) : Math.min(range, now + dif);
-		const nxt = !div ? _nxt : divran * Math.round(_nxt / divran);
+      const nxt = !div ? _nxt : divran * Math.round(_nxt / divran);
 		stl[pr] = nxt + 'px';
 		return nxt - now;
 	};
@@ -317,6 +328,70 @@ const addSliderWidget = (html, nm, pid, cb, dat, x, sym, notches) => {
 	[uid_sld, uid_lab].forEach(nm => { html[uid_lab] = get(uid_lab) });
 };
 
+const addSliderWidget2 = (html, cont, dat, cb, cls) => {
+	const uid_wgt = 'wgt_' + dat.uid;
+	const uid_tit = dat.uid_tit = uid_wgt + '_tit';
+	addUI(`<div id="${uid_wgt}" class="mt10 vcenter${uiv(cls.wgt)}"><label id="${uid_tit}" title="${dat.title}" class="shrink mono s13${uiv(cls.tit)}">${dat.sym || dat.uid}</label></div>`, cont);
+	html[uid_wgt] = get(uid_wgt);
+
+	const uid_sld = uid_wgt + '_sld';
+
+	[dat._p, dat.setPos] = addSlider({
+		id: uid_sld,
+		mode: ['h'],
+		cls: {slider: `slider2 ml5${uiv(cls.sld)}`, track: 'track nomouse', knob: 'knob'},
+		pos: {x: dat.def, y: 0.5},
+		notches: dat.notches,
+	}, html[uid_wgt], document.documentElement, cb, true);
+
+	if (dat.label) {
+		const mode = dat.label;
+		const uid_lab = dat.uid_lab = uid_wgt + '_lab';
+		const str =
+		mode == 'r' ?
+		`<label id="${uid_lab}" class="ml5 shrink mono s13${uiv(cls.lab)}">...</label>` :
+		mode == 'rw' ?
+		`<input id="${uid_lab}" type="text" spellcheck="false" class="ml5 shrink mono s13${uiv(cls.lab)}"/>` : '';
+		addUI(str, html[uid_wgt]);
+		html[uid_lab] = get(uid_lab);
+	}
+	[uid_sld, uid_tit].forEach(nm => { html[nm] = get(nm) });
+	html[uid_sld].setAttribute('title', dat.title);
+};
+
+const makeHSlider = (html, cont, uobj, cb, cls) => {
+	// uobj - unique per slider object 
+	uobj.min = uobj.min || 0;
+	uobj.max = uobj.max || 1;
+	uobj.def = uobj.def || 0.5;
+	uobj.mm = uobj.max - uobj.min;
+	const def_pos = (uobj.def - uobj.min) / uobj.mm;
+	// makeDraggable callback onMouse evt t = ['u', 'd', 'm']
+   const update = t => {
+		const val = uobj.min + uobj.mm * uobj._p.h / uobj._p.hmax;
+		const _v = uobj._v = formatNumber2(val, uobj.type);
+		const elem = html[uobj.uid_lab];
+		if(elem) setContent(elem, _v.string);
+		cb?.(_v); // sync value, render if 3D
+	};
+	// creates html[wgt_uid] adds to cont, creates label html[uobj.uid_tit/lab]
+	// adds uobj.setPos(), uobj._p {h(), v(), hmax, vmax}, uobj.uid_lab
+	addSliderWidget2(html, cont, uobj, update, cls);
+	//html[`wgt_${uobj.uid}_tit`].classList.add(cls.tit);
+	// set after uid_lab is created to use updated slider width
+	uobj.setPos(def_pos, 0.5);
+	update(''); // initial sync
+	// sync slider /w manual label input
+	//if (uobj.label == 'rw') {
+		html[`wgt_${uobj.uid}_lab`].val_ok = vt => {
+			uobj._v = formatNumber2(vt, uobj.type);
+			const pos = glClamp((vt - uobj.min) / uobj.mm, 0, 1);
+			uobj.setPos(pos, 0.5);
+		};
+	//}
+	return html['wgt_' + uobj.uid];
+ };
+
 const createFileUpload = obj => {
 	const id = obj.id;
 	let str = `<div class="none"><input type="file" id="${id}"></div>` +
@@ -351,4 +426,129 @@ const configFileLoader = (id, loaderCB) => {
 	e_url.addEventListener('click', () => { loaderCB({ url: e_path.value}) });
 };
 
-export { configFileLoader, createFileUpload, makeDraggable, addSlider, addSliderWidget, selReset, selText, selOpts, selVal, get, strToElement, addUI, setCont, createElem, uiLabel, uiInput, uiTextarea, uiSelect, uiMenu, uiCheckbox, uiButton, makeSwitchBtn, getElemCenter, getElemSize }
+const validInt = v => !isNaN(parseInt(v, 10));
+const validFloat = v => !isNaN(parseFloat(v));
+const validNumber = v => validInt(v) || validFloat(v);
+const gtzInt = v => validInt(v) && parseInt(v, 10) > 0;
+const gtzFloat = v => validFloat(v) && parseFloat(v) > 0;
+const gtzNumber = v => gtzInt || gtzFloat;
+const byteInt = v => {
+	const int = parseInt(v, 10);
+	return validInt(v) && int >= 0 && int < 256;
+};
+const normFloat = v => {
+	const flt = parseFloat(v);
+	return validFloat(v) && flt >= 0 && flt <= 1;
+};
+
+const REGEXP = {
+  int: [/^[+-]?[0-9]*$/, validInt],
+  uint: [/^[0-9]*$/, validInt],
+  gint: [/^[0-9]*$/, gtzInt],
+  _int: [/^-[0-9]*$/, validInt],
+  byte: [/^[0-9]*$/, byteInt],
+  float: [/^[+-]?[0-9]*\.?[0-9]*$/, validFloat],
+  ufloat: [/^[0-9]*\.?[0-9]*$/, validFloat],
+  gfloat: [/^[0-9]*\.?[0-9]*$/, gtzFloat],
+  _float: [/^-[0-9]*\.?[0-9]*$/, validFloat],
+  norm: [/^[01]?\.?[0-9]*$/, normFloat],
+  norm2f: [/^[01]?\.?[0-9]{0,2}$/, normFloat],
+  number: [/^[+-]?[0-9]*\.?[0-9]*$/, validNumber],
+  unumber: [/^[0-9]*\.?[0-9]*$/, validNumber],
+  gnumber: [/^[0-9]*\.?[0-9]*$/, gtzNumber],
+  _number: [/^-[0-9]*\.?[0-9]*$/, validNumber],
+};
+
+const elog = (out, str, add = false) => {
+	if (out) out.value = add ? out.value + str : str;
+};
+
+const elog_ok = (out, str, add) => {
+	out.classList.toggle('hide', false);
+	out.classList.toggle('elog', false);
+	out.classList.toggle('elog_ok', true);
+	elog(out, str, add);
+	setTimeout(() => {
+		out.classList.toggle('hide', true);
+		out.classList.toggle('elog', true);
+		out.classList.toggle('elog_ok', false);
+	}, 2000);
+};
+
+const val_fail = (elem, eobj, add = false) => {
+
+	for(const nm of ['regex', 'valid', 'ext'])
+		if(!eobj[nm]) {
+			elog(elem.val_log, elem.val_err[nm]);
+			break;
+		}
+	
+	const tid = elem.val_tid;
+	elem.val_log.classList.toggle('hide', false);
+	clearTimeout(tid.html);
+	tid.html = setTimeout(() => { elem.val_log.classList.toggle('hide', true) }, 2000);
+
+	elem.classList.toggle('flash_red', false);
+	clearTimeout(tid.css);
+	tid.css = setTimeout(() => { elem.classList.toggle('flash_red', true) }, 10);
+};
+
+const validate = (elem, data) => {
+	const val = getContent(elem);
+	const [beg, end] = [elem.selectionStart, elem.selectionEnd];
+	const v = val.slice(0, beg) + data + val.slice(end);
+	const vt = v.trim();
+	const regex = elem.val_obj[0].test(vt);
+	const valid = elem.val_obj[1](vt);
+	const ext = elem.val_ext?.(elem, data, vt) ?? true;
+	if(regex && valid && ext) {
+		elem.value = v;
+		elem.selectionStart = elem.selectionEnd = beg + data.length;
+		elem.val_ok?.(vt);
+	} else {
+		val_fail(elem, {regex, valid, ext});
+	}
+};
+
+const addValidator = (elem, t, ext_cb, val_err, val_log) => {
+	elem.val_obj = REGEXP[t];
+	elem.val_ext = ext_cb;
+	elem.val_err = val_err;
+	elem.val_tid = { html: 0, css: 0 };
+	elem.val_log = val_log;
+	// TODO insert
+	elem.addEventListener('keydown', evt => {
+		const key = evt.key;
+		if(key == 'Delete' || key == 'Backspace') {
+			const nosel = elem.selectionStart == elem.selectionEnd;
+			if(nosel)
+				if(key == 'Delete') elem.selectionEnd++; 
+				else elem.selectionStart--; 
+			evt.preventDefault();
+			validate(elem, '');
+			return;
+		}
+		if(key.length == 1 && !evt.ctrlKey) {
+			evt.preventDefault();
+			validate(elem, evt.key);
+		}
+	});
+	elem.addEventListener('drop', evt => { 
+		evt.preventDefault();
+		validate(elem, evt.dataTransfer.getData("text"));
+	});
+	elem.addEventListener('cut', evt => {
+		evt.preventDefault();
+		if(elem.selectionStart != elem.selectionEnd) 
+		validate(elem, '');
+	});
+	elem.addEventListener('paste', evt => {
+		evt.preventDefault();
+		validate(elem, evt.clipboardData.getData("text"));
+	});
+	elem.addEventListener('blur', evt => {
+		validate(elem, '');
+	});
+};
+
+export { configFileLoader, createFileUpload, makeDraggable, addSlider, addSliderWidget, addSliderWidget2, makeHSlider, selReset, selText, selOpts, selVal, get, strToElement, addUI, setCont, createElem, uiLabel, uiInput, uiTextarea, uiSelect, uiMenu, uiCheckbox, uiButton, makeSwitchBtn, getElemCenter, getElemSize, addValidator, elog, elog_ok, getContent, setContent }

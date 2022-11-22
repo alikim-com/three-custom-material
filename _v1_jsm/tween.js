@@ -2,7 +2,18 @@ import { log } from '/_v1_jsm/utils.js'
 
 function Tween(verbose = false) {
 	this.verbose = verbose;
-	this.tweens = [];
+   this.tweens = [];
+   this.frozen = 0;
+   this.delay = 0;
+}
+
+Tween.prototype.pause = function (mode) {
+   if (mode) {
+      this.frozen = performance.now();
+   } else {
+      this.delay += performance.now() - this.frozen;
+      this.frozen = 0;
+   }
 }
 
 Tween.prototype.add = function (obj) {
@@ -28,7 +39,10 @@ Tween.prototype.add = function (obj) {
 	this.tweens.push({ uid,	kval,	karr,	ext, beg, end,	idur: 1 / duration, ease, start, next, cb});
 }
 
-Tween.prototype.tick = function (now = performance.now()) {
+// TODO PAUSE/PLAY
+
+Tween.prototype.tick = function (now = performance.now() - this.delay) {
+   if (this.frozen) return;
    for (let i = 0; i < this.tweens.length; i++) {
       if (this.verbose) log(`tweens[${i}]`);
 		const tw = this.tweens[i];
@@ -78,6 +92,8 @@ Tween.prototype.tweenEnd = function (i, tw) {
 
 Tween.prototype.clear = function () {
    this.tweens = [];
+   this.frozen = 0;
+   this.delay = 0;
 }
 
 export { Tween }
