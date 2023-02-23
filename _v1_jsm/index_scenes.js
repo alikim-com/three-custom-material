@@ -146,63 +146,7 @@ const cameraLookAt = (cam, lookAt) => {
 	cam.userData.lookAt = [...lookAt];
 };
 
-IndexScenes.prototype.dustScene = function () {
-
-	const rngSymm = (v, a) => v + a * 2 * (Math.random() - 0.5);
-
-	const scene = this.scene;
-	const size = 1000;
-	const geo = new THREE.DodecahedronGeometry(0.001, 0);
-	const mat = this.shmat.rh_dust;
-	const dust = {
-		h: new THREE.InstancedMesh(geo, mat, size),
-	};
-	const height = {
-		h: new Array(size),
-	};
-	const rpos = this.rings.h.center;
-	const arr = dust.h.instanceMatrix.array;
-	let i = 0;
-	for (let mpos = 0; mpos < arr.length; mpos += 16) {
-		// scale
-		[arr[mpos + 0], arr[mpos + 5], arr[mpos + 10]] = [
-			rngSymm(1, 0.2),
-			rngSymm(1, 0.2),
-			rngSymm(1, 0.2)
-		];
-		// pos
-		const [r, fi] = [0.05 + 0.05 * Math.random(), 2 * Math.PI * Math.random()];
-		const h = height.h[i++] = 0.1 * Math.random();
-		[arr[mpos + 12], arr[mpos + 13], arr[mpos + 14]] = [
-			rpos[0] + r * Math.cos(fi),
-			rpos[1] - 0.2 * h,
-			rpos[2] + r * Math.sin(fi),
-		];
-		// !important
-		arr[mpos + 15] = 1;
-	}
-
-	this.dustAdd = nm => { scene.add(dust[nm]) };
-	this.dustRem = nm => { scene.remove(dust[nm]) };
-
-	this.dustSet = (nm, d) => {
-		const rpos = this.rings[nm].center;
-		const arr = dust[nm].instanceMatrix.array;
-		let i = 0;
-		for (let mpos = 0; mpos < arr.length; mpos += 16) {
-			const h = height[nm][i++];
-			const beg = rpos[1] - 0.2 * h;
-			const end = rpos[1] + 1.5 * h;
-			arr[mpos + 13] = beg + d * (end - beg);
-			if (d > 1) {
-				arr[mpos + 0] *= 0.985;
-				arr[mpos + 5] *= 0.985;
-				arr[mpos + 10] *= 0.985;
-			}
-		}
-		dust[nm].instanceMatrix.needsUpdate = true;
-	};
-}
+IndexScenes.prototype.dustScene = 
 
 IndexScenes.prototype.homeScene = function (scene, camera) {
 	const loc = this.rings.h.center;
@@ -493,7 +437,7 @@ IndexScenes.prototype.mainScene = function (w, h) {
 	
 	// rings setup
 	this.rings = rdata;
-	['home', 'tree', 'sky', 'fract', 'nebulae', 'aia', 'misc'].forEach(nm => { 
+	['home', 'tree', 'sky', 'fract', 'qcode', 'art', 'misc'].forEach(nm => { 
 		const robj = this.rings[nm[0]];
 		robj.ring = [];
 		robj.floor = [];

@@ -1,4 +1,4 @@
-import { cross, norm } from '/_v1_jsm/geometry.js'
+import { cross, norm, hexagon } from '/_v1_jsm/geometry.js'
 
 const vLen2 = v => {
 	let len = 0;
@@ -168,4 +168,37 @@ Koch3D.prototype.makeVert = function () {
 	this.ver = ver;
 };
 
-export {	MandelBox, Koch3D }
+// HEXAFLAKE
+
+function HexaFlake(R, lev, maxlev, ori = [0, 0]) { 
+	this.Rs = new Array(maxlev + 2).fill(0);
+	this.pos = [];
+	this.make(R, lev, maxlev, ori);
+	const len = this.pos.length;
+	const maxR = this.Rs[maxlev + 1];
+	const rec = 1 / (maxR * maxR);
+	this.dsq = new Array(len);
+	for (let i = 0; i < len; i++) {
+		const [px, py] = this.pos[i];
+		const [x, y] = [px - ori[0], py - ori[1]];
+		this.dsq[i] = (x * x + y * y) * rec;
+	}
+}
+
+HexaFlake.prototype.make = function(R, lev, maxlev, ori) {
+	const pnt = hexagon(R, ori);
+	if(lev < maxlev) {
+		const nlev = lev + 1;
+		const nR = R / 3;
+		for(const p of pnt) this.make(nR, nlev, maxlev, p);
+	} else {
+		this.pos.push(...pnt);
+	}
+	const Rs = this.Rs;
+	if(!Rs[lev]) {
+		Rs[lev] = R;
+		Rs[maxlev + 1] += R;
+	}
+}
+
+export {	MandelBox, Koch3D, HexaFlake }

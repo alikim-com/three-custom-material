@@ -5,10 +5,11 @@ let hint, hints;
 const styleToInt = str => parseInt(str.slice(0, -2));
 
 const updateHint = (id, cont, mode) => {
+   const txt = hints[id];
+   if (!txt) mode = false;
    hint.classList.toggle('none', !mode);
-  // if (!cont.style) cont.style = 'cursor:auto;';
    cont.style.cursor = mode ? 'pointer' : 'auto';
-	if(mode) hint.textContent = hints[id];
+   if (mode) hint.textContent = hints[id];
 };
 
 const addHint = (cont, _hints, elems = []) => {

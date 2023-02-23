@@ -227,6 +227,11 @@ select:focus {
 	pointer-events: none;
 }
 
+.nocursor {
+   cursor: none;
+   pointer-events: none;
+}
+
 .mt5 {
 	margin-top: 5px;
 }
@@ -270,6 +275,11 @@ select:focus {
 .w20 {
 	width: 20px;
    min-width: 20px;
+}
+
+.w30 {
+	width: 30px;
+   min-width: 30px;
 }
 
 .w40 {

@@ -360,6 +360,8 @@ TestScenes.prototype.boxScene = function (w, h, callback) {
 		new THREE.TorusKnotGeometry(1, 0.3, 50, 8),
 	];
 
+   const rnd_symm = (off, v) => v * (2 * Math.random() - 1) + off;
+
 	const sh_num = 10;
 	const shp = new Array(sh_num);
 
@@ -369,7 +371,7 @@ TestScenes.prototype.boxScene = function (w, h, callback) {
 		m.name = 'Mesh #' + i;
 		m.material.uniforms.color = { value: hslRgb([rand(), 0.9, 0.5]) };
 		const sz = 3 + 4 * rand();
-		m.scale.set(sz, sz, sz);
+      m.scale.set(sz, sz, sz); // rnd_symm(sz, 1)
 		const x = 50 * 2 * (rand() - 0.5);
 		const y = 0 + 30 * rand();
 		const z = 2 * (rand() - 0.5);

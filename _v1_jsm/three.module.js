@@ -1248,7 +1248,8 @@ class Matrix3 {
 
 	}
 
-	getNormalMatrix( matrix4 ) {
+   getNormalMatrix(matrix4) {
+      //console.log(43);
 
 		return this.setFromMatrix4( matrix4 ).invert().transpose();
 
@@ -9827,7 +9828,7 @@ class BufferGeometry extends EventDispatcher {
 
 			normal.applyNormalMatrix( normalMatrix );
 
-			normal.needsUpdate = true;
+         normal.needsUpdate = true;
 
 		}
 
@@ -12310,7 +12311,7 @@ class Plane {
 
 		const normal = this.normal.applyMatrix3( normalMatrix ).normalize();
 
-		this.constant = - referencePoint.dot( normal );
+      this.constant = - referencePoint.dot(normal);
 
 		return this;
 
@@ -18125,8 +18126,9 @@ class WebGLUniforms {
 
 }
 
-function WebGLShader( gl, type, string ) {
-
+function WebGLShader(gl, type, string) {
+   //console.log(string);
+   
 	const shader = gl.createShader( type );
 
 	gl.shaderSource( shader, string );
@@ -18520,8 +18522,8 @@ function generateCubeUVSize( parameters ) {
 
 }
 
-function WebGLProgram( renderer, cacheKey, parameters, bindingStates ) {
-
+function WebGLProgram(renderer, cacheKey, parameters, bindingStates) {
+   
 	// TODO Send this event to Three.js DevTools
 	// console.log( 'WebGLProgram', cacheKey );
 
@@ -28038,7 +28040,18 @@ function WebGLRenderer( parameters = {} ) {
 		object.onBeforeRender( _this, scene, camera, geometry, material, group );
 
 		object.modelViewMatrix.multiplyMatrices( camera.matrixWorldInverse, object.matrixWorld );
-		object.normalMatrix.getNormalMatrix( object.modelViewMatrix );
+      object.normalMatrix.getNormalMatrix(object.modelViewMatrix);
+      
+      /*
+      28206 setProgram for both mesh & material uni
+      console.log(42);
+      object = {
+         ...object,
+         get modelViewMatrix() {
+            debugger;
+            return object.modelViewMatrix;
+         }
+      };*/
 
 		material.onBeforeRender( _this, scene, camera, geometry, object, group );
 
@@ -28074,7 +28087,7 @@ function WebGLRenderer( parameters = {} ) {
 		const shadowsArray = currentRenderState.state.shadowsArray;
 
 		const lightsStateVersion = lights.state.version;
-
+      //if (material.type != "MeshPhongMaterial") debugger;
 		const parameters = programCache.getParameters( material, lights.state, shadowsArray, scene, object );
 		const programCacheKey = programCache.getProgramCacheKey( parameters );
 

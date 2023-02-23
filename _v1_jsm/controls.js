@@ -36,21 +36,22 @@ const logState = () => {
 
 const orbitObject0 = (pit, yaw) => {
    //logState();
-    const cq = obj.quaternion;
-    const qt = [cq.w, cq.x, cq.y, cq.z];
-    const [cx, cy, cz] = [rotate(1, 0, 0, ...qt), rotate(0, 1, 0, ...qt), rotate(0, 0, -1, ...qt)];
-    const rot = [cx[0] * pit + cy[0] * yaw, cx[1] * pit + cy[1] * yaw, cx[2] * pit + cy[2] * yaw];
-    const rotm = vectLength(rot);
-    const th = 0.5 * Math.asin(rotm / (rotm * rotm + 1));
-    const sin = Math.sin(th);
-    const q3 = cross(...rot, ...cz);
-    const q = norm([Math.cos(th), ...q3.map(x => x * sin)]); // input rotation quaternion
+   const cq = obj.quaternion;
+   const qt = [cq.w, cq.x, cq.y, cq.z];
+   const [cx, cy, cz] = [rotate(1, 0, 0, ...qt), rotate(0, 1, 0, ...qt), rotate(0, 0, -1, ...qt)];
+   const rot = [cx[0] * pit + cy[0] * yaw, cx[1] * pit + cy[1] * yaw, cx[2] * pit + cy[2] * yaw];
+   const rotm = vectLength(rot);
+   const th = 0.5 * Math.asin(rotm / (rotm * rotm + 1));
+   const sin = Math.sin(th);
+   const q3 = cross(...rot, ...cz);
+   const q = norm([Math.cos(th), ...q3.map(x => x * sin)]); // input rotation quaternion
 
-    const qn = mult(...q, ...qt);
-    const czn = rotate(0, 0, -1, ...qn);
+   const qn = mult(...q, ...qt);
+   const czn = rotate(0, 0, -1, ...qn);
 
-    obj.setRotationFromQuaternion({ x: qn[1], y: qn[2], z: qn[3], w: qn[0] });
-    obj.position.set(tar[0] - czn[0] * r, tar[1] - czn[1] * r, tar[2] - czn[2] * r);
+   obj.setRotationFromQuaternion({ x: qn[1], y: qn[2], z: qn[3], w: qn[0] });
+   obj.position.set(tar[0] - czn[0] * r, tar[1] - czn[1] * r, tar[2] - czn[2] * r);
+
    if (hlp) hlp.position.copy(obj.position);
    //logState();
 }
@@ -145,7 +146,7 @@ function Trackball() { ctype = 0; init.call(this, ...arguments) }
 Trackball.prototype.getObj = function () { return [obj, tar] } 
 Trackball.prototype.setActive = function(flag) { setActive.call(this, flag) }
 
-function init(container, _obj, lookAt, callback, scene, helper, usepage = true) {
+function init(container, _obj, lookAt, look, callback, scene, helper, usepage = true) {
 
    [x0, y0] = [0, 0];
    [x1, y1] = [0, 0];
@@ -166,7 +167,7 @@ function init(container, _obj, lookAt, callback, scene, helper, usepage = true) 
    notifyCaller = callback || function () { };
    contmu = usepage ? document.body : cont; // container for mouse up & move events
 
-   obj.lookAt(...tar);
+   if(look ?? true) obj.lookAt(...tar);
 
    inverse = type < 2 ? 1 : -1; // inverse input for cameras
 
@@ -295,7 +296,7 @@ const cam_ctrl = obj => {
     controls.setActive(false);
      obj.lookAt = null; // re-use internal tar
   }
-  controls = eval(`new ${obj.type}(obj.cont, obj.cam, obj.lookAt, obj.callback)`);
+  controls = eval(`new ${obj.type}(obj.cont, obj.cam, obj.lookAt, obj.look, obj.callback)`);
   controls.sensX *= obj?.sens?.x || 3;
   controls.sensY *= obj?.sens?.y || 3;
   controls.sensP *= obj?.sens?.p || 0.05;
@@ -345,11 +346,11 @@ const makeOverlay = obj => {
 
 // external calls
 
-const reset = (x, y, z) => {
+const reset = (x, y, z, look = true) => {
    const cpos = obj?.position;
    if (cpos) {
       tar = [x, y, z];
-      obj.lookAt(...tar);
+      if(look) obj.lookAt(...tar);
       r = vectLength([cpos.x - tar[0], cpos.y - tar[1], cpos.z - tar[2]]);
    }
 };

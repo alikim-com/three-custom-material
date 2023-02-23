@@ -63,12 +63,14 @@
 	#endif
 
 	#ifdef VPN
-	// interpolated world positions and normals
-	varying mat2x3 vpn;
+		// interpolated world positions and normals
+		varying vec3 vpn_pos;
+		varying vec3 vpn_nrm;
+		// inverse transpose mesh.matrixWorld
+		uniform mat3 normMatrix;
 	#endif
 	
 	varying vec2 vuv;
-
 	varying vec3 vColor;
 
 	void main() {
@@ -79,15 +81,14 @@
 		gl_Position = projectionMatrix * modelViewMatrix * pos;
 
 		#ifdef VPN
-		vec3 nor = vec3(normal);
-		#ifdef USE_INSTANCING
-			mat3 m = mat3(instanceMatrix);
-			nor /= vec3(dot(m[0], m[0]), dot(m[1], m[1]), dot(m[2], m[2]));
-			nor = m * nor;
-		#endif
-		vec4 nrm = vec4(nor, 0.0);
-		vpn = mat2x3(modelMatrix * mat2x4(pos, nrm));
-		vpn[1] = normalize(vpn[1]);
+			vec3 nrm = vec3(normal);
+			#ifdef USE_INSTANCING
+				mat3 m = mat3(instanceMatrix);
+				nrm /= vec3(dot(m[0], m[0]), dot(m[1], m[1]), dot(m[2], m[2]));
+				nrm = m * nrm;
+			#endif
+			vpn_pos = (modelMatrix * pos).xyz;
+			vpn_nrm = normalize(normMatrix * nrm);
 		#endif
 
 		vuv = uv;
@@ -251,7 +252,8 @@
 	#endif
 
 	#ifdef VPN
-		varying mat2x3 vpn;
+		varying vec3 vpn_pos;
+		varying vec3 vpn_nrm;
 	#endif
 
 	#ifdef SPECULAR
@@ -314,8 +316,9 @@
 		vec3 light = vec3(0.0);
 
 		#ifdef VPN
-			vec3 pos = vec3(vpn[0]);
-			vec3 nrm = gl_FrontFacing ? vpn[1] : -vpn[1];
+			vec3 pos = vpn_pos;
+			vec3 nrm = gl_FrontFacing ? vpn_nrm : -vpn_nrm;
+			nrm = normalize(nrm);
 		#endif
 
 		#if defined BMAP && defined VPN

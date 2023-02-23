@@ -249,7 +249,7 @@ const quaternFromVects = (v1, v2, err = 0.0001) => {
 		return norm(q);
 	} else {
 		const aux = [0, 0, 0];
-   	const va = v1.map(Math.abs);
+		const va = v1.map(Math.abs);
 		let [min, ind] = [va[0], 0];
 		if (va[1] < min) { min = va[1]; ind = 1; }
 		if (va[2] < min) ind = 2;
@@ -391,7 +391,7 @@ const noiseGeom = (data, amp, fact) => {
 		for (let c = 0; c < dim; c++)
 			data[i + c] += fact(data, i) * amp[c] * Math.random();
 	}
-}
+};
 
 const clamp = (x, min, max) => Math.min(Math.max(x, min), max);
 
@@ -461,4 +461,144 @@ QLerp.prototype.set = function(t, wise = 1) {
 	return quaternAdd(...qxy, ...quaternAdd(...qf, ...this.q1));
 }
 
-export { areaTriangle, profileGeom, twistGeom, noiseGeom, distLinePoint, distLinePoint3D, linesIntersect, pointInPolygon, polygonWinding, polygonOffset, dist, vectLength, vectsEqual, dot, cross, mirror, norm, norm2, cartToSphere, sphereToCart, quaternFromVects, quaternFromVectsFull, quaternFromETh, quaternAdd, quaternRotate, quaternRotateMult, quaternRotateMultInplace, LerpOrbit, QLerp, clamp, quaternCsCs }
+const gridCircle = (width, box) => {
+
+	if (width == 1) return [0, 0, 0, 0];
+
+	const b2 = box / 2;
+	const r = box * (width - 1) / 2;
+ 
+	const num = Math.ceil(width / 2) + 1;
+	const pos = {x:[], y:[]};
+	const d2 = [];
+ 
+	const off = width % 2 ? b2 : 0;
+	for(let i = 0; i < num; i++) {
+		// grid
+		const x = i * box - off;
+		pos.x[i] = pos.y[i] = x; 
+	}
+
+	const r2 = r * r;
+	const ibeg = Math.floor(r / box);
+	const jbeg = ibeg;
+ 
+	const checkBox = (i, j, pos, d2, r2) => {
+		const checkDist = (i, j) => {
+			const [x, y] = [pos.x[i], pos.y[j]];
+			d2[i] = d2[i] || [];
+			const _d2 = d2[i][j];
+			if(_d2) return _d2 < r2;
+			const d2_ = d2[i][j] = x * x + y * y;
+			return d2_ < r2;
+		};
+		let incl = 0;
+		for(let cy = 0; cy < 2; cy++)
+		for(let cx = 0; cx < 2; cx++) {
+			const [indx, indy] = [i + cx, j + cy];
+			const f = checkDist(indx, indy);
+			if(f) incl++;
+		}
+		return incl;
+	};
+ 
+	const pix = [];
+
+	const checkRow = (_i, _j) => {
+ 
+		const setPixel = (i, j) => {
+			pix.push(i, j, pos.x[i] + b2, pos.y[j] + b2);
+		};
+ 
+		let imin = Infinity;
+		let i = _i;
+		let cond = true;
+		while (cond) {
+			const incl = checkBox(i, _j, pos, d2, r2);
+			cond = incl > 0;
+			if(cond && incl < 4) {
+				if(i < imin) imin = i;
+				setPixel(i, _j);
+			}
+			i++;
+		}
+		i = _i - 1;
+		cond = true;
+		while (cond && i >= 0) {
+			const incl = checkBox(i, _j, pos, d2, r2);
+			cond = incl < 4;
+			if(incl > 0 && cond) {
+				if(i < imin) imin = i;
+				setPixel(i, _j);
+			}
+			i--;
+		}
+		return imin;
+	};
+	
+	let imin = ibeg;
+	for(let j = 0; j <= jbeg; j++) 
+		imin = checkRow(imin, j);
+	
+	return pix;
+};
+
+const gridOctant = (width, box) => {
+	const b4 = box / 4;
+	const pos = [];
+	const rad = gridCircle(width, box);
+	const odd = rad[rad.length - 2] < b4;
+	for(let i = 0; i < rad.length; i+=4) {
+		const w = odd ? 2 * rad[i] + 1 : 2 * (rad[i] + 1);
+		const z = rad[i + 3];
+		const pix = gridCircle(w, box);
+		for(let j = 0; j < pix.length; j+=4)
+			pos.push(pix[j + 2], pix[j + 3], z);
+	}
+	return pos;
+};
+
+const gridSphere = (width, box) => {
+	const b4 = box / 4;
+	const oct = gridOctant(width, box);
+	const _pos = [];
+	for (let i = 0; i < oct.length; i+=3) {
+		const [x, y, z] = oct.slice(i, i + 3);
+		const pos = [];
+		pos.push(x, y, z);
+		if (x > b4) pos.push(-x, y, z);
+		if (y > b4) {
+			const len = pos.length;
+			for (let i = 0; i < len; i += 3) {
+				const [x, y, z] = pos.slice(i, i + 3);
+				pos.push(x, -y, z);
+			}
+		}
+		if (z > b4) {
+			const len = pos.length;
+			for (let i = 0; i < len; i += 3) {
+				const [x, y, z] = pos.slice(i, i + 3);
+				pos.push(x, y, -z);
+			}
+		}
+		_pos.push(...pos);
+	}
+	return _pos;
+};
+
+const hexagon = (R, ori) => {
+	const r = R * Math.sqrt(3) / 2;
+	const R2 = R / 2;
+	const pnt = [
+	  [ r,  R2], [0,  R], [-r,  R2],
+	  [-r, -R2], [0, -R], [ r, -R2],
+	];
+	if(ori)
+	for(const p of pnt) {
+	  p[0] += ori[0];
+	  p[1] += ori[1];
+	}
+	return pnt;
+ };
+
+export { areaTriangle, profileGeom, twistGeom, noiseGeom, distLinePoint, distLinePoint3D, linesIntersect, pointInPolygon, polygonWinding, polygonOffset, dist, vectLength, vectsEqual, dot, cross, mirror, norm, norm2, cartToSphere, sphereToCart, quaternFromVects, quaternFromVectsFull, quaternFromETh, quaternAdd, quaternRotate, quaternRotateMult, quaternRotateMultInplace, LerpOrbit, QLerp, clamp, quaternCsCs, gridCircle, gridOctant, gridSphere, hexagon }

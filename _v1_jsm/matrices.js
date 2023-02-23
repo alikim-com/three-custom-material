@@ -1,3 +1,4 @@
+
 const to2D = (A, row, col) => {
 	const len = A.length;
 	if (len != row * col) {
@@ -111,42 +112,42 @@ const multVec = (A, V) => {
 };
 
 const multVec16CM = (A, V) => {
-   const Alen = A.length;
-   const Vr = V.length;
+	const Alen = A.length;
+	const Vr = V.length;
 	if (Alen != Vr * Vr) {
 		console.error('multVec16CM: dimentions mismatch');
 		return [];
-   }
-   const C = new Array(Vr);
-   for (let i = 0; i < Vr; i++) C[i] = 0;
-   for (let i = 0; i < Alen; i++) {
-      const r = i % Vr; 
-      const c = Math.floor(i / Vr);
-      C[r] += A[i] * V[c];
-   }
-   return C;
+	}
+	const C = new Array(Vr);
+	for (let i = 0; i < Vr; i++) C[i] = 0;
+	for (let i = 0; i < Alen; i++) {
+		const r = i % Vr; 
+		const c = Math.floor(i / Vr);
+		C[r] += A[i] * V[c];
+	}
+	return C;
 };
 
 const multCM = (A, B, Ac, Ar, Bc, Br) => {
-   const Alen = Ac * Ar;
+	const Alen = Ac * Ar;
 	if (Ac != Br) {
 		console.error(`multCM: dimentions mismatch A: ${Ac}x${Ar}, B: ${Bc}x${Br}`);
 		return [];
-   }
-   
-   const Clen = Ar * Bc;
-   const C = new Array(Clen);
-   for (let i = 0; i < Clen; i++) C[i] = 0;
-   for (let off = 0; off < Bc; off++) {
-      const offB = Br * off;
-      const offC = Ar * off;
-      for (let i = 0; i < Alen; i++) {
-         const r = i % Ar;
-         const c = Math.floor(i / Ar);
-         C[offC + r] += A[i] * B[offB + c];
-      }
-   }
-   return C;
+	}
+	
+	const Clen = Ar * Bc;
+	const C = new Array(Clen);
+	for (let i = 0; i < Clen; i++) C[i] = 0;
+	for (let off = 0; off < Bc; off++) {
+		const offB = Br * off;
+		const offC = Ar * off;
+		for (let i = 0; i < Alen; i++) {
+			const r = i % Ar;
+			const c = Math.floor(i / Ar);
+			C[offC + r] += A[i] * B[offB + c];
+		}
+	}
+	return C;
 };
 
 const mult = (A, B) => {
@@ -184,7 +185,7 @@ const mult2x2 = (A, B) => {
 };
 
 const makeOrtho = (l, r, t, b, n, f) => {
-   n = Math.abs(n);
+	n = Math.abs(n);
 	f = Math.abs(f);
 	if (f == n || r == l || t == b) {
 		console.error('makeOrtho(): division by zero');
@@ -200,7 +201,7 @@ const makeOrtho = (l, r, t, b, n, f) => {
 };
 
 const makeOrthoSym = (r, t, n, f) => {
-   n = Math.abs(n);
+	n = Math.abs(n);
 	f = Math.abs(f);
 	if (r == 0 || t == 0 || f == n) {
 		console.error('makeOrthoSym(): division by zero');
@@ -216,14 +217,14 @@ const makeOrthoSym = (r, t, n, f) => {
 };
 
 const makePersp = (fov, asp, n, f) => {
-   n = Math.abs(n);
-   f = Math.abs(f);
-   const tan = Math.tan(Math.PI * fov / 360);
-   if (n == 0 || f == n || tan == 0) {
+	n = Math.abs(n);
+	f = Math.abs(f);
+	const tan = Math.tan(Math.PI * fov / 360);
+	if (n == 0 || f == n || tan == 0) {
 		console.error('makePersp(): division by zero');
 		return [];
-   }
-   const tanr = 1 / tan;
+	}
+	const tanr = 1 / tan;
 	return [
 		[tanr / asp, 0, 0, 0],
 		[0, tanr, 0, 0],
@@ -254,6 +255,77 @@ const makeView = (qt, Spr) => {
 	];
 };
 
+const invert = (m, s, CM = false) => {
+
+	const zrow = new Array(s).fill(0);
+ 
+	const failCheck = (ind, piv) => {
+		if (Math.abs(piv) < 1e-8) {
+			console.error(`matrix ${m} is not invertible, pivot at step ${ind}: ${piv}`);
+			return 1;
+		}
+		return 0;
+	};
+ 
+	const I = new Array(s);
+	for(let k = 0; k < s; k++) {
+		I[k] = [...zrow];
+		I[k][k] = 1;
+	}
+ 
+	const M = new Array(s);
+ 
+	if(CM) {
+		for(let k = 0; k < s; k++) {
+			const arr = new Array(s);
+			for(let i = 0; i < s; i++) arr[i] = m[k + s * i];
+			M[k] = [...arr, ...I[k]];
+		}
+	} else {
+		for(let k = 0; k < s; k++) M[k] = [...m[k], ...I[k]];
+	}
+	
+	const r = new Array(s);
+	for(let k = 0; k < s; k++) r[k] = M[k];
+ 
+	const s2 = s * 2;
+ 
+	for(let k = 0; k < s; k++) {
+ 
+		let [piv, ind] = [r[k][k], k];
+		for (let i = k + 1; i < s; i++) {
+			const f = r[i][k];
+			if (Math.abs(f) > Math.abs(piv)) {
+				piv = f;
+				ind = i;
+			}
+		}
+		if(failCheck(k, piv)) {
+			const ret = new Array(s);
+			for(let k = 0; k < s; k++) ret[k] = zrow;
+			return ret;
+		}
+ 
+		if(ind) [r[k], r[ind]] = [r[ind], r[k]];
+		const rpiv = 1 / piv;
+		const f = new Array(s);
+		for (let i = 0; i < s; i++) f[i] = r[i][k];
+ 
+		for (let i = 0; i < s2; i++) {
+			const m = r[k][i] = r[k][i] * rpiv;
+			for (let j = 0; j < s; j++) {
+				if(j == k) continue;
+				r[j][i] -= m * f[j];
+			}
+		}
+
+	}
+	
+	const ret = new Array(s);
+	for(let k = 0; k < s; k++) ret[k] = r[k].slice(s, s2);
+	return ret;
+};
+
 const invert2x2 = (a, b, c, d) => {
 	const tmp = a * d - b * c;
 	if (Math.abs(tmp) < 1e-8) {
@@ -262,6 +334,33 @@ const invert2x2 = (a, b, c, d) => {
 	}
 	const D = 1 / tmp;
 	return [d, -b, -c, a].map(e => e * D);
+};
+
+const invert3x3 = m => {
+  
+	const [m00, m01, m02, m10, m11, m12, m20, m21, m22] =
+		[m[0][0], m[0][1], m[0][2], m[1][0], m[1][1], m[1][2], m[2][0], m[2][1], m[2][2]];
+ 
+	const detA = m00 * (m11 * m22 - m12 * m21);
+	const detB = m01 * (m10 * m22 - m12 * m20);
+	const detC = m02 * (m10 * m21 - m11 * m20);
+	const det = detA - detB + detC;
+
+	if (det < 1e-8) {
+		console.error('invert3x3, det is zero: ', m);
+		return [[0,0,0],[0,0,0],[0,0,0]];
+	}
+ 
+	const adjugate = [
+		[m11 * m22 - m12 * m21, m02 * m21 - m01 * m22, m01 * m12 - m02 * m11],
+		[m12 * m20 - m10 * m22, m00 * m22 - m02 * m20, m02 * m10 - m00 * m12],
+		[m10 * m21 - m11 * m20, m01 * m20 - m00 * m21, m00 * m11 - m01 * m10]
+	];
+ 
+	for (let i = 0; i < 3; i++)
+		for (let j = 0; j < 3; j++) adjugate[i][j] /= det;
+ 
+	return adjugate;
 };
 
 const invert4x4 = M => {
@@ -318,4 +417,4 @@ const fromPosSkewScale = obj => {
 	return [m0, m3, 0, 0, m1, m4, 0, 0, 0, 0, 1, 0, pos.x, pos.y, pos.z, 1];
 };
 
-export { to2D, to1D, makeIdentity, makeMove, makeScale, makeRotX, makeRotY, makeRotZ, transpose, multVec, multVec16CM, multCM, mult, makeOrtho, makeOrthoSym, makePersp, makeView, invert2x2, invert4x4, toPosSkewScale, fromPosSkewScale }
+export { to2D, to1D, makeIdentity, makeMove, makeScale, makeRotX, makeRotY, makeRotZ, transpose, multVec, multVec16CM, multCM, mult, makeOrtho, makeOrthoSym, makePersp, makeView, invert, invert2x2, invert3x3, invert4x4, toPosSkewScale, fromPosSkewScale }

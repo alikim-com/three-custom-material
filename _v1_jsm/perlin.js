@@ -141,7 +141,7 @@ function PerlinPoints(psize, grid, wrap, rend, mode) {
 	if (!rend)
 		return [mesh, null];
 
-	const [w, h] = [grid[0] * psize, grid[1] * psize];
+	const [w, h] = [grid[0] * psize, grid[1] * psize].map(e => Math.round(e));
    const [w2, h2] = [w / 2, h / 2];
    const opt = { depthBuffer: false };
    if (wrap[0]) opt.wrapS = THREE.RepeatWrapping;

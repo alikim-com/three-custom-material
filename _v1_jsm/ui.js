@@ -362,8 +362,8 @@ const addSliderWidget2 = (html, cont, dat, cb, cls) => {
 const makeHSlider = (html, cont, uobj, cb, cls) => {
 	// uobj - unique per slider object 
 	uobj.min = uobj.min || 0;
-	uobj.max = uobj.max || 1;
-	uobj.def = uobj.def || 0.5;
+	uobj.max = uobj.max ?? 1;
+	uobj.def = uobj.def ?? 0.5;
 	uobj.mm = uobj.max - uobj.min;
 	const def_pos = (uobj.def - uobj.min) / uobj.mm;
 	// makeDraggable callback onMouse evt t = ['u', 'd', 'm']

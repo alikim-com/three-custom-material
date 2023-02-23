@@ -1,14 +1,8 @@
-function log() {
-	console.log(...arguments);
-}
-
-let slog = obj => log(objToString(obj));
-
-const get = id => document.getElementById(id);
+import { get, log, slog, deepCopy } from '/_v1_jsm/utils.js'
 
 import * as THREE from '/_v1_jsm/three.module.js'
 
-import { sphereToCart, quaternRotateMult } from '/_v1_jsm/geometry.js'
+import { sphereToCart, quaternRotateMult, dist, quaternRotate } from '/_v1_jsm/geometry.js'
 
 let max_tex_size = 0;
 const gl = document.createElement('canvas')?.getContext('webgl');
@@ -511,6 +505,28 @@ const alphaLine = (vclr, pnts, a) => {
 	return new THREE.Line(geo, mat);
 };
 
+const makePoints = (pos, color = 0x880088, sz = 5, att = false) => {
+	const geo = new THREE.BufferGeometry();
+	geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+	const mat = new THREE.PointsMaterial({ color, size: sz, sizeAttenuation: att });
+	const pnt = new THREE.Points(geo, mat);
+	pnt.frustumCulled = false;
+	return pnt;
+ };
+ 
+ const makeLines = (pos, color = 0xffff00, type = 'line') => {
+	const geo = new THREE.BufferGeometry();
+	geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+	const mat = new THREE.LineBasicMaterial({ color });
+	 const mesh = {
+		 segm: THREE.LineSegments,
+		 loop: THREE.LineLoop,
+		 line: THREE.Line,
+	 };
+	const line = new mesh[type](geo, mat);
+	return line; 
+ };
+
 const camHelper = cam => {
 	const dtr = Math.PI / 180;
 	const grp = new THREE.Object3D();
@@ -579,6 +595,7 @@ const qGet = obj => {
 	const q = obj.quaternion;
 	return [q.w, q.x, q.y, q.z];
 };
+
 const qMake = q => new THREE.Quaternion(q[1], q[2], q[3], q[0]);
 
 const quaternToCS = (obj, _cs) => {
@@ -691,29 +708,32 @@ const makeMipmapTex = size => {
 	return canv_tex;
 };
  
-const enableTracking = (arr, props) => {
-	const tid = `_ET_`;
+const enableTracking = (arr, mailbox) => { // [cam.quaternion, Obj3D.position, ...]
 	arr.forEach(obj => { 
-		props.forEach(pr => {
-			const op = obj[pr];
-			if (!op) return;
-			obj[tid + pr] = { ...op };
-		});
-		obj.changed = () => {
-			for (const pr of props) {
-				const op = obj[pr];
-				const mp = obj[tid + pr];
-				for (const nm in op) if (op[nm] != mp[nm]) return true;
-			}
-			return false;
-		};
-		obj.memset = () => { 
-			for (const pr of props) {
-				const op = obj[pr];
-				const mp = obj[tid + pr];
-				for (const nm in op) mp[nm] = op[nm];
-			}
-		};
+
+		const q = obj.isQuaternion;
+		const prop = q ? ['_x', '_y', '_z'] : ['x', 'y', 'z'];
+		if (q) prop.push('_w');
+
+		for(const p of prop) {
+			const np = '_' + p;
+			Object.defineProperty(obj, np, {
+				configurable: true,
+				enumerable: true,
+				value: obj[p],
+				writable: true,
+			});
+			
+			Object.defineProperty(obj, p, {
+				configurable: true,
+				enumerable: true,
+				get: () => obj[np],
+				set: v => { 
+					obj[np] = v;
+					for (const pr in mailbox) mailbox[pr] = true;
+				},
+			});
+		}
 	});
 };
 
@@ -728,18 +748,79 @@ const disposeIMesh = (cont, im) => {
 
 const IMesh = (cont, gen, im, geo, mat, size, verbose) => {
 	if(im) {
-      if (!gen && im.userData.count >= size) {
-         if (verbose) log(`resizing IMesh ${im.userData.count} >= ${size}`);
+		if (!gen && im.userData.count >= size) {
+			if (verbose) log(`resizing IMesh ${im.userData.count} >= ${size}`);
 			im.count = size;
 			return im;
 		}
 		disposeIMesh(cont, im);
-   }
-   if (verbose) log(`new IMesh ${size}`);
+	}
+	if (verbose) log(`new IMesh ${size}`);
 	const imesh = new THREE.InstancedMesh(geo, mat, size);
 	imesh.userData.count = size;
 	cont.add(imesh);
 	return imesh;
 };
 
-export { bisecTriangle, computeTwistNormals, computeProfileNormals, traverseTree, makeRT, renderRT, renderRTVP, renderTexQuad, renderTexQuadCust, addHelper, camHelper, genAtlas, Selector3D, texRequest, vAlphaLine, alphaLine, qGet, qMake, quaternToCS, posGet, rgbGet, calcBox, getShader, rgbaToRgb, makeMipmapTex, enableTracking, blendTo3D, IMesh, log, slog, get }
+const setIMeshPos = (im, pos, update) => {
+	let ind = 0;
+	const arr = im.instanceMatrix.array;
+	const len = pos.length * 16;
+	for (let mpos = 0; mpos < len; mpos += 16) {
+		[arr[mpos + 12], arr[mpos + 13], arr[mpos + 14]] = [...pos[ind]];
+		arr[mpos + 15] = 1;
+		ind++;
+	}
+	if(update) im.instanceMatrix.needsUpdate = true;
+};
+
+const setIMeshClr = (im, clr, update) => {
+	const len = clr.length;
+	for (let i = 0; i < len; i++) im.setColorAt(i, clr[i]);
+	if(update) im.instanceColor.needsUpdate = true;
+};
+
+const findTarSphere = (camera, ori) => {
+	const campos = posGet(camera);
+	const camdist = dist(campos, ori);
+	const frw = quaternRotate(0, 0, -1, ...qGet(camera));
+	const lookat = [0, 0, 0];
+	for (let i = 0; i < 3; i++) lookat[i] = campos[i] + camdist * frw[i];
+	return lookat;
+};
+
+const breadcrumb = (pos, scene) => {
+	const tr = new THREE.Mesh(
+		new THREE.BoxGeometry(0.05, 0.05, 0.05),
+		new THREE.MeshBasicMaterial());
+	tr.position.set(...pos);
+	scene.add(tr);
+};
+
+const invTpose3x3 = m => { 
+  
+	const [m00, m01, m02, m10, m11, m12, m20, m21, m22] =
+		[m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]];
+	
+	const detA = m00 * (m11 * m22 - m12 * m21);
+	const detB = m01 * (m10 * m22 - m12 * m20);
+	const detC = m02 * (m10 * m21 - m11 * m20);
+	const det = detA - detB + detC;
+
+	if (det < 1e-8) {
+		console.error('invert3x3, det is zero: ', m);
+		return [[0,0,0],[0,0,0],[0,0,0]];
+	}
+ 
+	const adjugate = [
+		m11 * m22 - m12 * m21, m02 * m21 - m01 * m22, m01 * m12 - m02 * m11,
+		m12 * m20 - m10 * m22, m00 * m22 - m02 * m20, m02 * m10 - m00 * m12,
+		m10 * m21 - m11 * m20, m01 * m20 - m00 * m21, m00 * m11 - m01 * m10
+	];
+ 
+	for (let i = 0; i < 9; i++) adjugate[i] /= det;
+ 
+	return adjugate;
+};
+
+export { bisecTriangle, computeTwistNormals, computeProfileNormals, traverseTree, makeRT, renderRT, renderRTVP, renderTexQuad, renderTexQuadCust, addHelper, camHelper, genAtlas, Selector3D, texRequest, vAlphaLine, alphaLine, makePoints, makeLines, qGet, qMake, quaternToCS, posGet, rgbGet, calcBox, getShader, rgbaToRgb, makeMipmapTex, enableTracking, blendTo3D, IMesh, setIMeshPos, setIMeshClr, log, slog, get, findTarSphere, breadcrumb, invTpose3x3 }

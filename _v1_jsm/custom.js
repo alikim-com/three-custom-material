@@ -9,7 +9,7 @@ import { dot, cross, norm, vectsEqual } from '/_v1_jsm/geometry.js'
 
 import { get, img1x1, deepCopy, deepCopyFull, log, slog } from '/_v1_jsm/utils.js'
 
-import { getShader, traverseTree, makeRT, genAtlas, renderRTVP, renderTexQuadCust, texRequest } from '/_v1_jsm/utils_three.js'
+import { getShader, traverseTree, makeRT, genAtlas, renderRTVP, renderTexQuadCust, texRequest, invTpose3x3 } from '/_v1_jsm/utils_three.js'
 
 const texldr = new THREE.TextureLoader();
 
@@ -102,7 +102,7 @@ ShaderMaterial - userData - custMat: true
 SM Mesh - userData - (mat, vis, red) <- redState()
 */
 
-CUSTOM.prototype.makeTexture = function(arg) {
+CUSTOM.prototype.makeTexture = function (arg) {
 	if (typeof arg == 'string')
 		return texldr.load(arg);
 	else if (arg.constructor == Array)
@@ -510,10 +510,33 @@ CUSTOM.prototype.material = function (name, _obj = {}) {
 	if (_obj.imesh_self_shadow)
 		obj.userData.imesh_self_shadow = _obj.imesh_self_shadow;
 
-		objuni.gamma = uni.gamma || { value: 2.2 };
-		objuni.shad_mode = uni.shad_mode || { value: 0 };
-
-	return new THREE.ShaderMaterial(obj);
+	objuni.gamma = uni.gamma || { value: 2.2 };
+	objuni.shad_mode = uni.shad_mode || { value: 0 };
+	objuni.normMatrix = { value: dummy.mat3 };
+		
+	const material = new THREE.ShaderMaterial(obj);
+	
+	material.onBeforeRender = (_this, scene, camera, geometry, object, group) => {
+		const ud = object.userData;
+		const e = object.matrixWorld.elements;
+		const SR = [e[0], e[1], e[2], e[4], e[5], e[6], e[8], e[9], e[10]];
+		if (ud.matrixWorld) {
+			let match = true;
+			for (let i = 0; i < 9; i++)
+				if (ud.matrixWorld[i] != SR[i]) {
+					match = false;
+					break;
+				}
+			if (match) {
+				object.material.uniforms.normMatrix.value = ud.normMatrix; // sync mat and obj
+				return;
+			}
+		}
+		ud.matrixWorld = SR;
+		object.material.uniforms.normMatrix.value = ud.normMatrix = invTpose3x3(SR);
+	};
+	
+	return material;
 };
 
 CUSTOM.prototype.shallowCopyMat = function (material, full) {
@@ -530,7 +553,10 @@ CUSTOM.prototype.shallowCopyMat = function (material, full) {
 	const uni = material.uniforms;
 	if(!full) {
 		for (const p in uni) obj.uniforms[p] = uni[p];
-		return new THREE.ShaderMaterial(obj);
+		const copymat = new THREE.ShaderMaterial(obj);
+		if (material.onBeforeRender)
+			copymat.onBeforeRender = material.onBeforeRender;
+		return copymat;
 	}
 	for (const p in uni) {
 		const desc = Object.getOwnPropertyDescriptor(uni, p);
@@ -539,7 +565,10 @@ CUSTOM.prototype.shallowCopyMat = function (material, full) {
 		else
 			obj.uniforms[p] = uni[p];
 	}
-	return new THREE.ShaderMaterial(obj);
+	const copymat = new THREE.ShaderMaterial(obj);
+	if (material.onBeforeRender)
+		copymat.onBeforeRender = material.onBeforeRender;
+	return copymat;
 }
 
 CUSTOM.prototype.deepCopyMat = function (material) {
@@ -549,7 +578,10 @@ CUSTOM.prototype.deepCopyMat = function (material) {
 		uniforms: deepCopyFull(material.uniforms, { link: ['cam'] }),
 		userData: deepCopy(material.userData),
 	};
-	return new THREE.ShaderMaterial(obj);
+	const copymat = new THREE.ShaderMaterial(obj);
+	if (material.onBeforeRender)
+		copymat.onBeforeRender = material.onBeforeRender;
+	return copymat;
 }
 
 CUSTOM.prototype.makeShadowTree = scene => {

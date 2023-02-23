@@ -15,13 +15,13 @@ const getHTML = () => {
 };
 
 const parseGET = () => {
-   const getp = window.location.search.slice(1).split('&');
-   const GET = {};
-   getp.forEach(p => {
-      const [nm, v] = p.split('=');
-      if(nm?.length && v?.length) GET[nm] = v;
-   });
-   return GET;
+	const getp = window.location.search.slice(1).split('&');
+	const GET = {};
+	getp.forEach(p => {
+		const [nm, v] = p.split('=');
+		if(nm?.length && v?.length) GET[nm] = v;
+	});
+	return GET;
 }
  
 const printArr = (arr, num = 4) => {
@@ -35,15 +35,15 @@ const formatString = (str, n) => {
 };
 
 const formatNumber = (n, prec = 3, sign) => {
-   const w = !sign || n < 0 ? '' : sign;
-   const str = String(n);
-   const strlen = str.length;
+	const w = !sign || n < 0 ? '' : sign;
+	const str = String(n);
+	const strlen = str.length;
 	const arr = str.split('.');
 	const len = arr.length;
 	if (len == 2) {
 		if (arr[1].length > prec)
 			return `${w}${arr[0]}.${arr[1].slice(0, prec)}`;
-      const toadd = prec - arr[1].length;
+		const toadd = prec - arr[1].length;
 		return w + str.padEnd(strlen + toadd, '0');
 	} else if (len == 1) {
 		return w + `${str}.`.padEnd(strlen + prec + 1, '0');
@@ -51,23 +51,23 @@ const formatNumber = (n, prec = 3, sign) => {
 };
 
 const formatNumber2 = (n, fmt) => {
-   const s = fmt[0] == ' ' && n > 0 ? '\xa0' : '';
-   fmt = fmt[0] == ' ' ? fmt.slice(1) : fmt;
-   const [t, prec] = fmt.split('.');
-   const ret = {};
-   const str = prec ? formatNumber(n, parseInt(prec)) : String(n);
-   const float = parseFloat(str);
-   if (t[0] == 'f') {
-      ret.float = float;
-      ret.string = s + str;
-   } else if (t[0] == 'i') {
-      ret.int = Math.round(float);
-      ret.string = s + ret.int;
-   } else if (t[0] == 'u') {
-      ret.int = Math.max(0, Math.round(float));
-      ret.string = s + ret.int;
-   }
-   return ret;
+	const s = fmt[0] == ' ' && n > 0 ? '\xa0' : '';
+	fmt = fmt[0] == ' ' ? fmt.slice(1) : fmt;
+	const [t, prec] = fmt.split('.');
+	const ret = {};
+	const str = prec ? formatNumber(n, parseInt(prec)) : String(n);
+	const float = parseFloat(str);
+	if (t[0] == 'f') {
+		ret.float = float;
+		ret.string = s + str;
+	} else if (t[0] == 'i') {
+		ret.int = Math.round(float);
+		ret.string = s + ret.int;
+	} else if (t[0] == 'u') {
+		ret.int = Math.max(0, Math.round(float));
+		ret.string = s + ret.int;
+	}
+	return ret;
 };
 
 const strToSafe = (str) => {
@@ -105,20 +105,20 @@ const objToString = obj => {
 	else if (obj.constructor == Object || obj instanceof Object) {
 		let reto = '';
 		for (let p in obj)
-         if (obj.hasOwnProperty(p)) {
-            
-            const desc = Object.getOwnPropertyDescriptor(obj, p);
-            if (desc.get || desc.set) {
-               reto += (desc.get ? desc.get : desc.set) + ',';
-            } else {
+			if (obj.hasOwnProperty(p)) {
+				
+				const desc = Object.getOwnPropertyDescriptor(obj, p);
+				if (desc.get || desc.set) {
+					reto += (desc.get ? desc.get : desc.set) + ',';
+				} else {
 					
-               const char = p[0].charCodeAt(0);
-               const esc = p.indexOf("'") != -1;
-               const quo = p.indexOf(' ') != -1 || esc || char > 47 && char < 58;
-               const ep = esc ? p.replaceAll("'", "\\'") : p;
-               const strp = quo ? `'${ep}'` : ep;
-               reto += `${strp}:${objToString(obj[p])},`;
-            }
+					const char = p[0].charCodeAt(0);
+					const esc = p.indexOf("'") != -1;
+					const quo = p.indexOf(' ') != -1 || esc || char > 47 && char < 58;
+					const ep = esc ? p.replaceAll("'", "\\'") : p;
+					const strp = quo ? `'${ep}'` : ep;
+					reto += `${strp}:${objToString(obj[p])},`;
+				}
 			}
 		return '{' + reto.slice(0, -1) + '}';
 	}
@@ -240,16 +240,55 @@ const clipCopy = (txt, cb) => {
 };
 
 const bouncer = (a, b, v, err = 0.0001) => {
-   const [ab, va, vb] = [Math.abs(a - b), Math.abs(v - a), Math.abs(v - b)];
-   if(Math.abs(ab - va - vb) < err) return v;
-   const [adj, opp, ext] = va < vb ? [a, b, va] : [b, a, vb];
-   const ato = adj < opp ? 1.0 : -1.0;
-   const folds = ext / ab;
-   const ff = Math.floor(folds);
-   const tail = ext - ff * ab;
-   return ff % 2 == 0.0 ? adj + ato * tail : opp - ato * tail;
+	const [ab, va, vb] = [Math.abs(a - b), Math.abs(v - a), Math.abs(v - b)];
+	if(Math.abs(ab - va - vb) < err) return v;
+	const [adj, opp, ext] = va < vb ? [a, b, va] : [b, a, vb];
+	const ato = adj < opp ? 1.0 : -1.0;
+	const folds = ext / ab;
+	const ff = Math.floor(folds);
+	const tail = ext - ff * ab;
+	return ff % 2 == 0.0 ? adj + ato * tail : opp - ato * tail;
+};
+
+function Counter(cnt, cb) { 
+	this._cnt = cnt;
+	this.tick = () => { if (--this._cnt == 0) cb() };
 };
 
 const flip = (a, b, f) => f ? [a, b] : [b, a];
 
-export { get, img1x1, getHTML, parseGET, printArr, log, slog, formatString, formatNumber, formatNumber2, strToSafe, safeToStr, objToString, deepCopy, deepCopyFull, saveAs, clipCopy, bouncer, flip }
+function FindRange() {
+	this.reset();
+}
+FindRange.prototype.update = function (v) {
+	this.min = v >= this.min ? this.min : v;
+	this.max = v <= this.max ? this.max : v;
+}
+FindRange.prototype.reset = function () {
+	this.min = Infinity;
+	this.max = -Infinity;
+}
+FindRange.prototype.log = function () {
+	console.log(`min: ${this.min}, max: ${this.max}`);
+}
+
+const getUniqueAttr = (arr, size = 3, err = 0.001) => {
+	const res = [];
+	for (let i = 0; i < arr.length; i+=size) {
+		let match = false;
+		for (let j = 0; j < res.length; j+=size) {
+
+			let cont = false;
+			for(let s = 0; s < size; s++) 
+				if(Math.abs(res[j + s] - arr[i + s]) > err) { cont = true; break; }
+			if(cont) continue;
+
+			match = true;
+			break;
+		}
+		if(!match) res.push(arr[i], arr[i + 1], arr[i + 2]);
+	}
+	return res;
+};
+
+export { get, img1x1, getHTML, parseGET, printArr, log, slog, formatString, formatNumber, formatNumber2, strToSafe, safeToStr, objToString, deepCopy, deepCopyFull, saveAs, clipCopy, bouncer, flip, Counter, FindRange, getUniqueAttr }

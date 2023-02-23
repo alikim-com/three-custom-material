@@ -411,6 +411,7 @@ TREE.prototype.solidify = function (prf, par, gen = true) {
 		return [_idx, _vert, _norm];
 	};
 
+   /*
 	const shineThrough_141 = (mat, val = 0.5) => {
 		mat.onBeforeCompile = function(shader) {
 			shader.uniforms.shineThrough = { value: val };
@@ -421,7 +422,7 @@ TREE.prototype.solidify = function (prf, par, gen = true) {
 			shader.vertexShader ='uniform float shineThrough;\n' + 
 			shader.vertexShader.replace('#include <lights_lambert_vertex>', new_vs);
 		}
-   };
+   };*/
    
    const translucency_146 = (mat, val = 0.5) => {
 
