@@ -38,11 +38,11 @@ loadAssets(async_prom, toload);
 
 const dummy = () => ({
 	float: 0,
-	vec2: new Array(2),
-	vec3: new Array(3),
-	vec4: new Array(4),
-	mat3: new Array(9),
-	mat4: new Array(16),
+	vec2: new Array(2).fill(0),
+	vec3: new Array(3).fill(0),
+	vec4: new Array(4).fill(0),
+	mat3: new Array(9).fill(0),
+	mat4: new Array(16).fill(0),
 	sampler2D: texldr.load(img1x1),
 });
 
@@ -55,12 +55,12 @@ function CUSTOM() { // usage: const cust = await new CUSTOM(...);
 
 		await new Promise((res, rej) => { _res = res; _rej = rej; })
 		.catch( err => { log('async CUSTOM err:', err) });
-		  
+
 		this.dummy = dummy();
   
 		return this;
 	})();
-	
+
 	this.dummy = dummy();
 };
 
@@ -450,8 +450,6 @@ CUSTOM.prototype.material = function (name, _obj = {}) {
 
 	}
 
-	for (const nm of ['fog', 'monochr']) if (uni[nm]) objuni[nm] = uni[nm];
-
 	// material specific
 
 	if (uni.map)
@@ -512,14 +510,14 @@ CUSTOM.prototype.material = function (name, _obj = {}) {
 
 	objuni.gamma = uni.gamma || { value: 2.2 };
 	objuni.shad_mode = uni.shad_mode || { value: 0 };
-	objuni.normMatrix = { value: dummy.mat3 };
-		
+
 	const material = new THREE.ShaderMaterial(obj);
 	
 	material.onBeforeRender = (_this, scene, camera, geometry, object, group) => {
-		const ud = object.userData;
+      const ud = object.userData;
 		const e = object.matrixWorld.elements;
-		const SR = [e[0], e[1], e[2], e[4], e[5], e[6], e[8], e[9], e[10]];
+      const SR = [e[0], e[1], e[2], e[4], e[5], e[6], e[8], e[9], e[10]];
+      const ne = object.normalMatrix.elements;
 		if (ud.matrixWorld) {
 			let match = true;
 			for (let i = 0; i < 9; i++)
@@ -527,13 +525,16 @@ CUSTOM.prototype.material = function (name, _obj = {}) {
 					match = false;
 					break;
 				}
-			if (match) {
-				object.material.uniforms.normMatrix.value = ud.normMatrix; // sync mat and obj
-				return;
-			}
-		}
-		ud.matrixWorld = SR;
-		object.material.uniforms.normMatrix.value = ud.normMatrix = invTpose3x3(SR);
+         if (match) {
+            // overwrite cam space based normalMatrix in THREE.WebGLRenderer.renderObject
+            // object.normalMatrix.getNormalMatrix(object.modelViewMatrix);
+            for (let i = 0; i < 9; i++) ne[i] = ud.normalMatrix[i];
+            return;
+         }
+      }
+      ud.matrixWorld = SR;
+      ud.normalMatrix = invTpose3x3(SR);
+      for (let i = 0; i < 9; i++) ne[i] = ud.normalMatrix[i];
 	};
 	
 	return material;
