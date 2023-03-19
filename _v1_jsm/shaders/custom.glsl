@@ -67,11 +67,13 @@
 		varying vec3 vpn_pos;
 		varying vec3 vpn_nrm;
 		// inverse transpose mesh.matrixWorld
-		uniform mat3 normMatrix;
+		// uniform mat3 normMatrix;
 	#endif
 	
 	varying vec2 vuv;
 	varying vec3 vColor;
+
+	<val js?.inject?.before_main_vs>
 
 	void main() {
 		vec4 pos = vec4(position, 1.0);
@@ -88,7 +90,7 @@
 				nrm = m * nrm;
 			#endif
 			vpn_pos = (modelMatrix * pos).xyz;
-			vpn_nrm = normalize(normMatrix * nrm);
+			vpn_nrm = normalize(normalMatrix * nrm);
 		#endif
 
 		vuv = uv;
@@ -104,6 +106,8 @@
 		#ifdef IMESH_SELF_SHADOW
 			vrgID = instanceRGID;
 		#endif
+
+		<val js?.inject?.end_main_vs>
 	}
 </script>
 <script type="x-shader/x-function" id="quaternFromVects">
@@ -310,7 +314,7 @@
 
 	uniform float gamma;
 
-	<val js?.inject?.before_main>
+	<val js?.inject?.before_main_fs>
 
 	void main() {
 		vec3 light = vec3(0.0);
@@ -474,9 +478,9 @@
 			#endif
 		#endif
 		
-		vec3 sRGB = gamma >= 0.0 ? pow(light, vec3(1.0 / gamma)) * rgb : light * rgb;
+		vec3 sRGB = false && gamma >= 0.0 ? pow(light, vec3(1.0 / gamma)) * rgb : light * rgb;
 		
-		<val js?.inject?.color_filter>
+		<val js?.inject?.end_main_fs>
 
 		gl_FragColor = vec4(sRGB, 1.0);
 	}
